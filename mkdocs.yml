@@ -1,0 +1,83 @@
+# 站点元信息
+site_name: Demo · CodeX-like AI Agent 文档
+site_description: 形如 CodeX 的全平台桌面 AI Agent 应用 —— 参考设计与使用文档
+site_author: demo
+# remote 确定后回填，避免本地构建产生 repo_url 相关警告
+# repo_url: ""
+# repo_name: ""
+
+# 主题
+theme:
+  name: material
+  language: zh
+  palette:
+    # 跟随系统
+    - media: "(prefers-color-scheme)"
+      toggle:
+        icon: material/brightness-auto
+        name: 跟随系统
+    # 亮色
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/brightness-7
+        name: 切换到暗色模式
+    # 暗色
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/brightness-4
+        name: 切换到亮色模式
+  features:
+    - navigation.tabs
+    - navigation.sections
+    - navigation.indexes
+    - navigation.top
+    - navigation.footer
+    - search.suggest
+    - search.highlight
+    - content.code.copy
+    - content.code.annotate
+
+# Markdown 扩展
+markdown_extensions:
+  - admonition
+  - attr_list
+  - md_in_html
+  - toc:
+      permalink: true
+  - pymdownx.details
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.inlinehilite
+  - pymdownx.snippets
+  - pymdownx.tabbed:
+      alternate_style: true
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+
+# 导航结构
+nav:
+  - 首页: index.md
+  - 快速开始:
+      - 环境准备: getting-started/prerequisites.md
+      - 文档本地预览: getting-started/docs-preview.md
+  - 项目概览:
+      - 项目简介: overview/introduction.md
+      - 设计目标: overview/goals.md
+      - 技术栈: overview/tech-stack.md
+  - 架构设计:
+      - 总体架构: architecture/overview.md
+      - 任务委派树: architecture/delegation-tree.md
+      - 推理强度: architecture/reasoning-effort.md
+      - KV Cache 特化层: architecture/kv-cache-layer.md
+      - MCP 集成: architecture/mcp.md
+  - 路线图: roadmap.md
+  - 贡献指南: contributing.md
