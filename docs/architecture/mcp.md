@@ -23,11 +23,11 @@ flowchart LR
 - **MCP Server**：以 stdio / SSE / HTTP 等方式运行，暴露工具（tools）、资源（resources）与提示（prompts）；
 - **传输方式**：桌面场景优先本地 stdio 进程，远程场景可用 SSE / HTTP。
 
-## 与 KV Cache 特化层的关系
+## 与能力特化层的关系
 
 - MCP 提供**外部能力**（工具 / 数据）；
-- KV Cache 特化层提供**项目内特化**（上下文 / 策略）；
-- 两者互补：Agent 通过 MCP 调用工具，通过 KV Cache 层获得特化后的上下文与缓存。
+- 能力特化层提供**项目内特化**（上下文 / 工具 / 提示 / 检索），并可把 MCP Server 注册为特化工具；
+- 两者互补：Agent 通过 MCP 调用工具，通过能力特化层获得特化后的上下文。
 
 ## 边界情况
 
@@ -35,4 +35,4 @@ flowchart LR
 - 工具权限与用户授权；
 - 远程 Server 的网络与鉴权。
 
-相关：[总体架构](overview.md) · [KV Cache 特化层](kv-cache-layer.md)。
+相关：[总体架构](overview.md) · [能力特化层](capability-layer.md)。

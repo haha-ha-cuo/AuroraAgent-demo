@@ -1,10 +1,26 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
 [project]
-name = "demo-docs"
+name = "demo-agent"
 version = "0.1.0"
-description = "形如 CodeX 的全平台桌面 AI Agent 应用 —— 文档站"
+description = "形如 CodeX 的全平台桌面 AI Agent 应用"
 requires-python = ">=3.11,<3.15"
+dependencies = [
+    "langchain-core>=0.3",
+    "langchain-openai>=0.2",
+    "langgraph>=0.2",
+    "python-dotenv>=1.0",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["demo_agent"]
 
 [dependency-groups]
 docs = [
     "mkdocs-material>=9.5",
+]
+dev = [
+    "pytest>=8",
 ]

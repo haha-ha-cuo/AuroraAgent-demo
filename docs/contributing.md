@@ -32,12 +32,12 @@
 示例：
 
 ```
-docs: 新增 KV Cache 特化层设计文档
+docs: 新增能力特化层设计文档
 ```
 
 ## 文档写作约定
 
-- **语言**：正文使用简体中文；专有名词（LangChain、LangGraph、MCP、KV Cache）保持英文；
+- **语言**：正文使用简体中文；专有名词（LangChain、LangGraph、MCP、能力特化层、缓存层）保持统一；
 - **结构**：架构类章节以“参考设计”标注开头，落地后回写为实际行为；
 - **图表**：优先使用 Mermaid，便于随代码演进维护；
 - **链接**：站内链接用相对路径（如 `../architecture/overview.md`），保证 `--strict` 构建通过；
@@ -45,11 +45,14 @@ docs: 新增 KV Cache 特化层设计文档
 
 | 术语 | 统一写法 |
 | --- | --- |
-| LangChain | LangChain |
+| LangChain 核心抽象 | LangChain Core / `langchain-core` |
 | LangGraph | LangGraph |
 | MCP | MCP |
-| KV Cache | KV Cache |
+| 能力特化层 | 能力特化层（Capability / Specialization） |
+| 缓存层 | 缓存层（Cache，内部优化） |
 | 推理强度 | 推理强度（reasoning effort） |
+
+> 依赖约定：不引入 `langchain` 元包，直接使用 `langchain-core` + `langgraph` + 集成包（见 [ADR-003](architecture/decisions.md#adr-003)）。
 
 ## 本地校验
 

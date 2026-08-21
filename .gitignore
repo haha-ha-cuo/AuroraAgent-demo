@@ -5,6 +5,10 @@ __pycache__/
 *.egg-info/
 .uv/
 .uv-cache/
+.pytest_cache/
+
+# 密钥与本地配置
+.env
 
 # MkDocs 构建产物
 site/

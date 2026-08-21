@@ -10,10 +10,13 @@
 
 ## 阶段二：Agent 核心
 
-- 落地 LangGraph 委派树与检查点
-- 实现推理强度的自适应决策
-- 打通 LangChain 工具调用与 MCP 接入
-- 实现 KV Cache 层及特化接口（第一版）
+- [x] 最小纵向切片 demo：委派树 + 推理强度 + 能力特化层 + 本地 API 管理（见[运行最小 demo](getting-started/demo.md)）
+- [ ] 落地 LangGraph 委派树与检查点（生产化）
+- [ ] 推理强度从启发式升级为 LLM 自适应决策
+- [ ] 打通 MCP 接入（当前 demo 以只读工具为占位）
+- [ ] 实现能力特化层接口（第一版，作用域 / 优先级 / 回退）
+- [ ] 安全权限模型：确认门 / 白名单 / dry-run / 沙箱（[ADR-005](architecture/decisions.md#adr-005)）
+- [ ] 最小 eval 集，校准推理强度（[ADR-006](architecture/decisions.md#adr-006)）
 
 ## 阶段三：桌面壳
 

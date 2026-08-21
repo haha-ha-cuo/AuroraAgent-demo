@@ -1,6 +1,6 @@
 # Demo · CodeX-like AI Agent
 
-形如 CodeX 的**全平台桌面 AI Agent 应用**：拿到一个项目后，Agent 会把任务委派给子 Agent，由 Agent 自身决定委派质量（推理强度），并通过可对外扩展的 KV Cache 层让用户特化 Agent 的能力。
+形如 CodeX 的**全平台桌面 AI Agent 应用**：拿到一个项目后，Agent 会把任务委派给子 Agent，由 Agent 自身决定委派质量（推理强度），并通过可对外扩展的**能力特化层**让用户特化 Agent 的能力。
 
 > 当前处于**阶段一：文档站**。本仓库的架构章节为**参考设计**，待实现落地后逐步回填为实际行为文档。
 
@@ -8,7 +8,7 @@
 
 - **任务委派树**：根 Agent 将任务分解为树形结构，逐层委派给子 Agent（LangGraph 承载）。
 - **自适应推理强度**：Agent 自行决定每次委派的质量档位，类比 CodeX 的 reasoning effort。
-- **能力可特化**：在 KV Cache 层对外开放接口，用户可自定义特化 Agent 的上下文、工具与提示。
+- **能力可特化**：在能力特化层对外开放接口，用户可自定义特化 Agent 的上下文、工具、提示与检索策略。
 - **MCP 工具生态**：通过 MCP 接入外部工具与数据源。
 - **全平台分发**：面向 macOS / Windows / Linux 的桌面应用形态。
 
@@ -24,10 +24,11 @@
 
 ## 技术栈速览
 
-- [LangChain](https://www.langchain.com/) —— Agent 与工具编排基础
+- [LangChain Core](https://www.langchain.com/) —— Agent 核心抽象（`langchain-core`）
 - [LangGraph](https://www.langchain.com/langgraph) —— 有状态的任务委派图
 - [MCP](https://modelcontextprotocol.io/) —— 模型上下文协议，工具/数据接入
-- KV Cache —— 可特化的缓存与能力特化层
+- 能力特化层 —— 可插拔的上下文 / 工具 / 提示 / 检索策略
+- 本地 API 管理层 —— 远程模型接入 + 密钥本地管理
 - uv —— Python 环境与依赖管理
 
 详见[技术栈](overview/tech-stack.md)。
