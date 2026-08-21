@@ -81,6 +81,7 @@ nav:
       - 能力特化层: architecture/capability-layer.md
       - 模型接入与 API 管理: architecture/model-access.md
       - MCP 集成: architecture/mcp.md
+      - 评估与校准 (eval): architecture/eval.md
       - 关键决策 (ADR): architecture/decisions.md
   - 路线图: roadmap.md
   - 贡献指南: contributing.md

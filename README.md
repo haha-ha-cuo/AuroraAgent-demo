@@ -25,6 +25,16 @@ cp .env.example .env   # 填入 AGENT_API_KEY / AGENT_BASE_URL / AGENT_MODEL
 
 详见 [运行最小 demo](docs/getting-started/demo.md)。
 
+## 评估
+
+最小 eval 集（12 个 fixture，校准任务识别与推理强度，零 token 成本）：
+
+```bash
+uv run python -m demo_agent.eval
+```
+
+详见 [评估与校准](docs/architecture/eval.md)。
+
 ## 文档
 
 完整文档见 [docs/](docs/index.md)，或本地启动：
