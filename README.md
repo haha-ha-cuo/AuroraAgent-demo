@@ -2,11 +2,24 @@
 
 形如 CodeX 的**全平台桌面 AI Agent 应用**：拿到一个项目后，Agent 将任务委派给子 Agent，由 Agent 自身决定委派质量（推理强度），并通过可对外扩展的**能力特化层**让用户特化 Agent 的能力。
 
-> 当前进度：**阶段一（文档站）+ 阶段二的最小纵向切片 demo**。
+> 当前进度：**阶段一（文档站）+ 阶段二（Agent 运行时）+ 阶段三 MVP（Electron 桌面壳）**。
 
 ## 技术栈
 
-LangChain Core · LangGraph · MCP · 能力特化层 · 本地 API 管理 · uv
+LangChain Core · LangGraph · MCP · 能力特化层 · 本地 API 管理 · uv · Electron · React
+
+## 桌面应用（端到端 MVP）
+
+Electron 壳 + React 聊天 UI + Python Agent 运行时（WebSocket 联调，含委派树可视化与确认门弹窗）：
+
+```bash
+uv sync                    # Python 依赖
+cd apps/desktop
+pnpm install               # 首次需下载 Electron 二进制
+pnpm dev                   # 同时起 Vite 渲染层 + Electron（自动拉起 Python 服务）
+```
+
+> 也可单独起 Python 服务后连接：`uv run python -m demo_agent.server --port 8765`，再让渲染层连 `ws://127.0.0.1:8765/ws`。
 
 ## 最小 demo
 
