@@ -8,10 +8,12 @@ version = "0.1.0"
 description = "形如 CodeX 的全平台桌面 AI Agent 应用"
 requires-python = ">=3.11,<3.15"
 dependencies = [
+    "fastapi>=0.115",
     "langchain-core>=0.3",
     "langchain-openai>=0.2",
     "langgraph>=0.2",
     "python-dotenv>=1.0",
+    "uvicorn>=0.30",
 ]
 
 [tool.hatch.build.targets.wheel]

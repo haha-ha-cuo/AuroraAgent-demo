@@ -8,7 +8,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Annotated, Any, Literal, TypedDict
+from typing import Annotated, Any, Callable, Literal, TypedDict
 
 from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_core.messages import HumanMessage, SystemMessage, ToolMessage
@@ -251,24 +251,44 @@ def build_graph(
     settings: Settings,
     registry: CapabilityRegistry,
     gate: ConfirmationGate | None = None,
+    on_event: Callable[[dict], None] | None = None,
 ) -> Any:
     """构建并编译委派图。
 
     ``gate`` 为 None 时使用安全默认（读放行、写/执行默认拒绝）。
+    ``on_event`` 可选，用于把规划/任务进度流式回调给调用方（如 WebSocket 服务）。
     """
     model = settings.build_model()
     tools = {t.name: t for t in registry.tools}
     if gate is None:
         gate = ConfirmationGate()
 
+    def emit(event: dict) -> None:
+        if on_event is not None:
+            on_event(event)
+
+    def plan(state: AgentState) -> dict:
+        out = plan_node(state)
+        emit({"type": "plan", "tasks": out.get("tasks", [])})
+        return out
+
     def worker(state: AgentState) -> dict:
         task = state["task"]
+        emit(
+            {
+                "type": "task_start",
+                "task_id": task["id"],
+                "description": task["description"],
+                "effort": task["effort"],
+            }
+        )
         if model is None:
             result = _mock_worker(task, tools, gate)
         else:
             result = _live_worker(
                 state["objective"], task, model, tools, registry, gate
             )
+        emit({"type": "task_result", "task_id": task["id"], "result": result})
         return {"results": {task["id"]: result}}
 
     def report_node(state: AgentState) -> dict:
@@ -277,10 +297,12 @@ def build_graph(
             rid = task["id"]
             res = state["results"].get(rid, "(无结果)")
             lines.append(f"[{task['effort']}] {task['description']}\n  → {res}")
-        return {"report": "\n\n".join(lines)}
+        report = "\n\n".join(lines)
+        emit({"type": "report", "report": report})
+        return {"report": report}
 
     graph = StateGraph(AgentState)
-    graph.add_node("plan", plan_node)
+    graph.add_node("plan", plan)
     graph.add_node("worker", worker)
     graph.add_node("report", report_node)
 
