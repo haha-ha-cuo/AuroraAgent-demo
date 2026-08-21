@@ -13,6 +13,11 @@ __pycache__/
 # MkDocs 构建产物
 site/
 
+# 前端 / Electron
+node_modules/
+.pnpm-store/
+apps/desktop/dist/
+
 # 系统与编辑器
 .DS_Store
 .idea/

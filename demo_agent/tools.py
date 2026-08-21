@@ -20,6 +20,7 @@ _IGNORED_DIRS = {
     ".venv",
     ".uv-cache",
     ".pytest_cache",
+    ".pnpm-store",
     "site",
     "__pycache__",
     "node_modules",
