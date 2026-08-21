@@ -20,6 +20,17 @@ _IGNORED_DIRS = {
     "node_modules",
 }
 
+# 敏感文件：工具层面拒绝列举/读取，避免密钥进入模型上下文（ADR-002）。
+_SENSITIVE_EXACT = {".env", "id_rsa", "id_ed25519", "id_dsa", ".netrc"}
+_SENSITIVE_SUBSTR = ("secret", "credential", "password", "api_key", "apikey")
+
+
+def _is_sensitive(name: str) -> bool:
+    n = name.lower()
+    if n in _SENSITIVE_EXACT or (n.startswith(".env.") and n != ".env.example"):
+        return True
+    return any(k in n for k in _SENSITIVE_SUBSTR)
+
 
 @tool
 def list_files(path: str = ".") -> str:
@@ -33,6 +44,8 @@ def list_files(path: str = ".") -> str:
     lines = [f"{path}"]
     for child in sorted(p.rglob("*")):
         if child.is_file() and not (_IGNORED_DIRS & set(child.parts)):
+            if _is_sensitive(child.name):
+                continue
             lines.append(str(child))
     return "\n".join(lines)
 
@@ -45,6 +58,8 @@ def read_file(path: str) -> str:
         return f"文件不存在: {path}"
     if not p.is_file():
         return f"不是文件: {path}"
+    if _is_sensitive(p.name):
+        return f"拒绝读取敏感文件: {path}"
     try:
         return p.read_text(encoding="utf-8", errors="replace")
     except Exception as exc:  # noqa: BLE001
