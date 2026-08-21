@@ -7,6 +7,7 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import Annotated, Any, Literal, TypedDict
 
 from langchain_core.language_models.chat_models import BaseChatModel
@@ -21,12 +22,27 @@ from .settings import Settings
 from .tools import risk_of
 
 Effort = Literal["low", "medium", "high"]
-MAX_ITERATIONS = 6
 
 # 推理强度启发式（demo 占位）：命中高风险关键词 → high，命中低风险关键词 → low，其余 medium。
 _EFFORT_KEYWORDS: dict[str, tuple[str, ...]] = {
     "high": ("架构", "重构", "安全", "设计", "复杂", "性能", "并发", "数据库"),
     "low": ("列出", "列表", "查看", "文件", "统计", "行数", "结构"),
+}
+
+
+@dataclass(frozen=True)
+class EffortConfig:
+    """推理强度如何影响真实 worker 行为。"""
+
+    brief: str  # 注入到子任务里的输出要求
+    max_iterations: int
+    review: bool  # 是否追加一轮自评改进
+
+
+EFFORT_CONFIGS: dict[str, EffortConfig] = {
+    "low": EffortConfig(brief="请简明扼要地回答，不超过 60 字。", max_iterations=3, review=False),
+    "medium": EffortConfig(brief="请给出完整、准确的回答。", max_iterations=6, review=False),
+    "high": EffortConfig(brief="请给出完整、准确且结构化的回答。", max_iterations=6, review=True),
 }
 
 
@@ -120,6 +136,29 @@ def _execute_tool(
         return f"工具执行失败: {exc}"
 
 
+def _extract_usage(msg: Any) -> dict[str, int]:
+    """从消息里提取 token 用量（优先 usage_metadata，回退 llm_output）。"""
+    um = getattr(msg, "usage_metadata", None)
+    if um:
+        return {
+            "prompt": um.get("input_tokens", 0),
+            "completion": um.get("output_tokens", 0),
+            "total": um.get("total_tokens", 0),
+        }
+    llm_out = getattr(msg, "llm_output", {}) or {}
+    tu = llm_out.get("token_usage", {}) or {}
+    return {
+        "prompt": tu.get("prompt_tokens", 0),
+        "completion": tu.get("completion_tokens", 0),
+        "total": tu.get("total_tokens", 0),
+    }
+
+
+def _accumulate(msg: Any, usage: list | None) -> None:
+    if usage is not None:
+        usage.append(_extract_usage(msg))
+
+
 def _live_worker(
     objective: str,
     task: Task,
@@ -127,8 +166,10 @@ def _live_worker(
     tools: dict[str, BaseTool],
     registry: CapabilityRegistry,
     gate: ConfirmationGate,
+    usage: list | None = None,
 ) -> str:
-    """真实模型：手动 ReAct 循环（绑定工具 → 调用 → 执行 → 回填）。"""
+    """真实模型：手动 ReAct 循环，并按推理强度差异化行为。"""
+    config = EFFORT_CONFIGS.get(task["effort"], EFFORT_CONFIGS["medium"])
     model_with_tools = model.bind_tools(list(tools.values()))
     messages = [
         SystemMessage(content=registry.system_prompt()),
@@ -136,22 +177,58 @@ def _live_worker(
             content=(
                 f"总体目标: {objective}\n"
                 f"当前子任务: {task['description']}\n"
-                "请使用工具完成任务，并返回简洁结果。"
+                f"{config.brief}\n请使用工具完成任务，并返回结果。"
             )
         ),
     ]
 
-    for _ in range(MAX_ITERATIONS):
+    answer = ""
+    for _ in range(config.max_iterations):
         response = model_with_tools.invoke(messages)
+        _accumulate(response, usage)
         messages.append(response)
         tool_calls = getattr(response, "tool_calls", None)
         if not tool_calls:
-            content = getattr(response, "content", "") or ""
-            return str(content)
+            answer = str(getattr(response, "content", "") or "")
+            break
         for tc in tool_calls:
             output = _execute_tool(tc["name"], tc["args"], tools, gate)
             messages.append(ToolMessage(content=output, tool_call_id=tc["id"]))
-    return "达到最大迭代次数，任务未完成。"
+
+    if not answer:
+        answer = "达到最大迭代次数，任务未完成。"
+
+    if config.review:
+        review_response = model.invoke(
+            [
+                SystemMessage(
+                    content="你是严谨的评审。请检查并改进下面的回答，使其更准确、完整、结构化，并直接输出改进后的回答。"
+                ),
+                HumanMessage(
+                    content=f"任务: {task['description']}\n原始回答:\n{answer}\n\n改进后的回答:"
+                ),
+            ]
+        )
+        _accumulate(review_response, usage)
+        answer = str(getattr(review_response, "content", "") or answer)
+
+    return answer
+
+
+def run_task(
+    settings: Settings,
+    registry: CapabilityRegistry,
+    gate: ConfirmationGate,
+    task: Task,
+    objective: str,
+    usage: list | None = None,
+) -> str:
+    """公开入口：直接执行单个子任务（供 eval / 对照实验复用）。"""
+    model = settings.build_model()
+    tools = {t.name: t for t in registry.tools}
+    if model is None:
+        return _mock_worker(task, tools, gate)
+    return _live_worker(objective, task, model, tools, registry, gate, usage)
 
 
 def _mock_worker(task: Task, tools: dict[str, BaseTool], gate: ConfirmationGate) -> str:

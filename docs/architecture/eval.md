@@ -54,7 +54,47 @@ EvalCase(
 - `effort_is(task_id, level)`：断言某任务强度；
 - `result_contains(task_id, *substrings)`：断言某任务结果包含子串。
 
+## 强度分档对照实验（judge）
+
+最小 eval 集只锁确定性行为，回答不了「高强度档位值不值」。对照实验对此：对**同一任务分别用 low / medium / high 强度运行**，再用 judge 模型打分，输出质量分 vs token 成本的对比。
+
+```bash
+# 默认：全部任务 × 三档 × 各 1 次（走真实模型，会消耗 token）
+uv run python -m demo_agent.experiment
+
+# 只跑一个任务 / 限制档位 / 每档重复 N 次取平均
+uv run python -m demo_agent.experiment --task summarize_readme --tiers low,high --repeat 3
+```
+
+推理强度会真实影响 worker 行为（见 [推理强度](reasoning-effort.md) 与 `demo_agent/graph.py::EFFORT_CONFIGS`）：
+
+| 档位 | 行为差异 |
+| --- | --- |
+| low | 要求简答（≤60 字）、迭代上限 3、无自评 |
+| medium | 要求完整回答、迭代上限 6、无自评 |
+| high | 完整结构化回答、迭代上限 6、**多一轮自评改进** |
+
+输出示例：
+
+```text
+任务: summarize_readme — 阅读 README.md 并总结项目定位与技术栈
+  tier    score  prompt  completion  total    耗时
+  low     3.0    1200    180        1380     2.1
+  medium  4.0    1600    260        1860     2.8
+  high    5.0    2200    420        2620     4.9
+
+=== 分档汇总（跨任务平均） ===
+  tier    平均分  平均token   平均耗时
+  low     3.00    1380        2.10
+  medium  4.00    1860        2.80
+  high    5.00    2620        4.90
+```
+
 ## 当前覆盖与局限
 
-- 覆盖 12 项：任务识别（列文件/读 README/读 pyproject/写文件）、强度分档（high/low/medium）、端到端结果、确认门拒绝写。
-- **局限**：只校验确定性行为，不评估开放式回答的质量；无法量化「高强度比低强度好多少」。这两点需要引入 judge（模型打分）与成本/质量曲线，见 [ADR-006](decisions.md#adr-006) 待决策项。
+- **确定性 eval**：12 项，锁任务识别 + 强度分档 + 端到端 + 确认门（mock，零成本）。
+- **对照实验**：judge 打分 + 三档成本/质量对比（live，消耗 token）。
+- **局限**：
+  - judge 是单一模型打分，存在方差与偏差；可靠结论需要 `--repeat` 多次取平均 + 人工抽检；
+  - 档位行为目前是 prompt 级差异（简答/完整/自评），尚未叠加「不同模型 / temperature / max_tokens」等更细的档位策略；
+  - 见 [ADR-006](decisions.md#adr-006) 待决策项。

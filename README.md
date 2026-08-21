@@ -33,6 +33,12 @@ cp .env.example .env   # 填入 AGENT_API_KEY / AGENT_BASE_URL / AGENT_MODEL
 uv run python -m demo_agent.eval
 ```
 
+强度分档对照实验（judge 打分，质量 vs token 成本，走真实模型）：
+
+```bash
+uv run python -m demo_agent.experiment
+```
+
 详见 [评估与校准](docs/architecture/eval.md)。
 
 ## 文档

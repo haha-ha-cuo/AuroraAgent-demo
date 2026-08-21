@@ -18,7 +18,7 @@
 - [x] 安全权限模型·确认门（风险分级 + 默认拒绝，[ADR-005](architecture/decisions.md#adr-005)）
 - [ ] 安全权限模型·白名单 / dry-run / 沙箱（[ADR-005](architecture/decisions.md#adr-005)）
 - [x] 最小 eval 集（12 个 fixture，校准任务识别与推理强度，[ADR-006](architecture/decisions.md#adr-006)）
-- [ ] eval 升级：judge 打分 + 强度分档成本/质量曲线
+- [x] eval 升级：judge 打分 + 强度分档对照实验（[ADR-006](architecture/decisions.md#adr-006)）
 
 ## 阶段三：桌面壳
 
