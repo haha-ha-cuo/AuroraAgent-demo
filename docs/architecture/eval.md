@@ -70,9 +70,13 @@ uv run python -m demo_agent.experiment --task summarize_readme --tiers low,high 
 
 | 档位 | 行为差异 |
 | --- | --- |
-| low | 要求简答（≤60 字）、迭代上限 3、无自评 |
-| medium | 要求完整回答、迭代上限 6、无自评 |
-| high | 完整结构化回答、迭代上限 6、**多一轮自评改进** |
+| low | 简答（≤60 字）+ `max_tokens=256` 硬截断、迭代上限 3、无自评 |
+| medium | 完整回答 + `max_tokens=1024`、迭代上限 6、无自评 |
+| high | 完整结构化回答 + `max_tokens=2048`、迭代上限 6、**多一轮自评改进** |
+
+judge 从三个维度打分（各 1-5，取平均为最终分）：**完整性 / 准确性 / 简洁性**，用于给出部分分、避免单一满分饱和。
+
+任务集覆盖易/难两类：易（总结单文件）、难（跨文件架构对比）、**真机（调用本地 Blender 创建球体，execute 级工具）**。
 
 输出示例：
 
@@ -92,9 +96,9 @@ uv run python -m demo_agent.experiment --task summarize_readme --tiers low,high 
 
 ## 当前覆盖与局限
 
-- **确定性 eval**：12 项，锁任务识别 + 强度分档 + 端到端 + 确认门（mock，零成本）。
-- **对照实验**：judge 打分 + 三档成本/质量对比（live，消耗 token）。
+- **确定性 eval**：14 项，锁任务识别 + 强度分档 + 端到端 + 确认门（mock，零成本）。
+- **对照实验**：多维 judge（完整/准确/简洁）+ 三档成本/质量对比（live，消耗 token），含 Blender 真机任务。
 - **局限**：
   - judge 是单一模型打分，存在方差与偏差；可靠结论需要 `--repeat` 多次取平均 + 人工抽检；
-  - 档位行为目前是 prompt 级差异（简答/完整/自评），尚未叠加「不同模型 / temperature / max_tokens」等更细的档位策略；
+  - 档位策略已含 `max_tokens` 硬截断与自评，尚未叠加「不同模型 / temperature」等更细维度；
   - 见 [ADR-006](decisions.md#adr-006) 待决策项。

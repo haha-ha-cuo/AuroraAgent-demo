@@ -37,12 +37,13 @@ class EffortConfig:
     brief: str  # 注入到子任务里的输出要求
     max_iterations: int
     review: bool  # 是否追加一轮自评改进
+    max_tokens: int  # 硬性限制单次生成的 token 上限
 
 
 EFFORT_CONFIGS: dict[str, EffortConfig] = {
-    "low": EffortConfig(brief="请简明扼要地回答，不超过 60 字。", max_iterations=3, review=False),
-    "medium": EffortConfig(brief="请给出完整、准确的回答。", max_iterations=6, review=False),
-    "high": EffortConfig(brief="请给出完整、准确且结构化的回答。", max_iterations=6, review=True),
+    "low": EffortConfig(brief="请简明扼要地回答，不超过 60 字。", max_iterations=3, review=False, max_tokens=256),
+    "medium": EffortConfig(brief="请给出完整、准确的回答。", max_iterations=6, review=False, max_tokens=1024),
+    "high": EffortConfig(brief="请给出完整、准确且结构化的回答。", max_iterations=6, review=True, max_tokens=2048),
 }
 
 
@@ -100,6 +101,10 @@ def plan_node(state: AgentState) -> dict:
     if any(k in objective for k in ("写入", "写文件", "创建文件", "生成文件")):
         tasks.append(
             {"id": "write_file", "description": "写入演示文件", "effort": "medium"}
+        )
+    if any(k in objective for k in ("球体", "blender", "Blender", "3D", "建模")):
+        tasks.append(
+            {"id": "blender", "description": "在本地 Blender 中创建球体", "effort": "high"}
         )
 
     if not tasks:
@@ -170,7 +175,7 @@ def _live_worker(
 ) -> str:
     """真实模型：手动 ReAct 循环，并按推理强度差异化行为。"""
     config = EFFORT_CONFIGS.get(task["effort"], EFFORT_CONFIGS["medium"])
-    model_with_tools = model.bind_tools(list(tools.values()))
+    model_with_tools = model.bind_tools(list(tools.values()), max_tokens=config.max_tokens)
     messages = [
         SystemMessage(content=registry.system_prompt()),
         HumanMessage(
@@ -199,7 +204,8 @@ def _live_worker(
         answer = "达到最大迭代次数，任务未完成。"
 
     if config.review:
-        review_response = model.invoke(
+        review_model = model.bind(max_tokens=config.max_tokens)
+        review_response = review_model.invoke(
             [
                 SystemMessage(
                     content="你是严谨的评审。请检查并改进下面的回答，使其更准确、完整、结构化，并直接输出改进后的回答。"
@@ -249,6 +255,8 @@ def _mock_worker(task: Task, tools: dict[str, BaseTool], gate: ConfirmationGate)
             tools,
             gate,
         )
+    if tid == "blender":
+        return _execute_tool("blender_create_sphere", {"radius": 1.0}, tools, gate)
     return f"(mock) 对任务「{task['description']}」返回确定性占位结果。"
 
 

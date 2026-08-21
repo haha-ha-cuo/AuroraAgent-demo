@@ -53,14 +53,14 @@
 - **状态**：已采纳（最小 eval 集已落地）
 - **背景**：“自适应推理强度”需要一个基准来校准——没有 eval，无法判断高强度档位是否真的更优。
 - **已落地**：
-  - `demo_agent/eval.py`：12 个任务 fixture，在确定性 mock 模式下校验「任务识别 + 推理强度分档 + 端到端结果」；
+  - `demo_agent/eval.py`：14 个任务 fixture，在确定性 mock 模式下校验「任务识别 + 推理强度分档 + 端到端结果」；
   - 零 token 成本、可反复跑，并纳入 pytest 回归（`tests/test_eval.py`）；
-  - `demo_agent/experiment.py`：judge 打分 + 三档对照实验，产出质量分 vs token 成本对比；
-  - 推理强度真实影响 worker 行为（简答 / 完整 / 完整 + 自评改进，见 `EFFORT_CONFIGS`）；
+  - `demo_agent/experiment.py`：多维 judge（完整/准确/简洁）+ 三档对照实验，产出质量分 vs token 成本对比，含 Blender 真机任务；
+  - 推理强度真实影响 worker 行为：简答 + `max_tokens` 硬截断 / 完整 / 完整 + 自评改进（见 `EFFORT_CONFIGS`）；
   - 后续 LLM 规划器落地后，用同一套 fixture 对比校准。
 - **待决策项**：
   - judge 的方差与偏差控制（多次采样 + 人工抽检）；
-  - 更细的档位策略（不同模型 / temperature / max_tokens）。
+  - 更细的档位策略（不同模型 / temperature）。
 
 ## 待补充
 

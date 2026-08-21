@@ -127,6 +127,14 @@ FIXTURES: list[EvalCase] = [
     EvalCase("e2e_write_denied", "写入文件", [
         result_contains("write_file", "拒绝"),
     ]),
+    # execute 级工具：Blender（mock 下被确认门拒绝，不真实拉起 Blender）
+    EvalCase("plan_blender", "创建一个球体", [
+        tasks_include("blender"),
+        effort_is("blender", "high"),
+    ]),
+    EvalCase("e2e_blender_denied", "创建一个球体", [
+        result_contains("blender", "拒绝"),
+    ]),
 ]
 
 

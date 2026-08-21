@@ -6,6 +6,11 @@
 
 from __future__ import annotations
 
+import os
+import re
+import shutil
+import subprocess
+import tempfile
 from pathlib import Path
 
 from langchain_core.tools import tool
@@ -37,6 +42,7 @@ RISK_LEVELS: dict[str, str] = {
     "list_files": "read",
     "read_file": "read",
     "write_file": "write",
+    "blender_create_sphere": "execute",
 }
 _DEFAULT_RISK = "execute"
 
@@ -93,4 +99,69 @@ def write_file(path: str, content: str) -> str:
         return f"写入失败: {exc}"
 
 
-DEFAULT_TOOLS = [list_files, read_file, write_file]
+def _find_blender() -> str | None:
+    """定位 Blender 可执行文件。"""
+    explicit = os.environ.get("BLENDER_BIN")
+    if explicit:
+        return explicit
+    found = shutil.which("blender")
+    if found:
+        return found
+    candidate = "/Applications/Blender.app/Contents/MacOS/Blender"
+    if Path(candidate).exists():
+        return candidate
+    return None
+
+
+@tool
+def blender_create_sphere(radius: float = 1.0, name: str = "Sphere") -> str:
+    """在本地 Blender（headless）中创建一个球体。属于执行操作，需经确认门。"""
+    blender_bin = _find_blender()
+    if not blender_bin:
+        return "未找到 Blender，请安装或设置 BLENDER_BIN。"
+
+    safe_name = re.sub(r"[^A-Za-z0-9_]", "_", name) or "Sphere"
+    script = (
+        "import bpy\n"
+        f"bpy.ops.mesh.primitive_uv_sphere_add(radius={radius!r})\n"
+        "obj = bpy.context.active_object\n"
+        f"obj.name = {safe_name!r}\n"
+        "print('SPHERE_CREATED', obj.name, 'radius', " f"{radius!r})\n"
+        "print('SCENE_OBJECTS', [o.name for o in bpy.data.objects])\n"
+    )
+
+    script_path: str | None = None
+    try:
+        with tempfile.NamedTemporaryFile("w", suffix=".py", delete=False) as f:
+            f.write(script)
+            script_path = f.name
+        proc = subprocess.run(
+            [blender_bin, "--background", "--python", script_path],
+            capture_output=True,
+            text=True,
+            timeout=120,
+        )
+    except subprocess.TimeoutExpired:
+        return "Blender 执行超时（>120s）。"
+    except Exception as exc:  # noqa: BLE001
+        return f"Blender 执行失败: {exc}"
+    finally:
+        if script_path:
+            try:
+                os.unlink(script_path)
+            except OSError:
+                pass
+
+    out = (proc.stdout or "") + (proc.stderr or "")
+    if "SPHERE_CREATED" in out:
+        objects_line = next(
+            (line for line in out.splitlines() if line.startswith("SCENE_OBJECTS")), ""
+        )
+        return f"成功创建球体（{safe_name}，半径 {radius}）。\n{objects_line}"
+    return (
+        f"Blender 执行未确认成功（exit={proc.returncode}）。\n"
+        + "\n".join(out.splitlines()[-15:])
+    )
+
+
+DEFAULT_TOOLS = [list_files, read_file, write_file, blender_create_sphere]
