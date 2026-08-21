@@ -7,6 +7,7 @@
                {"type":"run_start","objective"}
                {"type":"plan","tasks":[...]}
                {"type":"task_start","task_id","description","effort"}
+               {"type":"token","task_id","text"}
                {"type":"task_result","task_id","result"}
                {"type":"report","report"}
                {"type":"done"}

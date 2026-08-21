@@ -194,6 +194,11 @@ body {
   animation: pulse 1s infinite;
 }
 
+.dot.streaming {
+  background: var(--accent);
+  animation: pulse 1s infinite;
+}
+
 .dot.done {
   background: var(--ok);
 }

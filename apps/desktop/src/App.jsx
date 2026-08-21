@@ -60,6 +60,16 @@ export default function App() {
           },
         }))
         break
+      case 'token':
+        setTaskStates((s) => ({
+          ...s,
+          [ev.task_id]: {
+            ...s[ev.task_id],
+            status: 'streaming',
+            result: (s[ev.task_id]?.result || '') + ev.text,
+          },
+        }))
+        break
       case 'task_result':
         setTaskStates((s) => ({
           ...s,

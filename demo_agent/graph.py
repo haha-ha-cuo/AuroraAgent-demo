@@ -7,11 +7,12 @@
 
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass
 from typing import Annotated, Any, Callable, Literal, TypedDict
 
 from langchain_core.language_models.chat_models import BaseChatModel
-from langchain_core.messages import HumanMessage, SystemMessage, ToolMessage
+from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
 from langchain_core.tools import BaseTool
 from langgraph.graph import END, START, StateGraph
 from langgraph.types import Send
@@ -166,6 +167,54 @@ def _accumulate(msg: Any, usage: list | None) -> None:
         usage.append(_extract_usage(msg))
 
 
+def _stream_chat(
+    model: BaseChatModel,
+    messages: list,
+    task_id: str,
+    usage: list | None,
+    on_event: Callable[[dict], None] | None,
+) -> tuple[str, list[dict]]:
+    """流式调用模型，返回 (内容文本, 合并后的 tool_calls 列表)。
+
+    过程中把每个 token 以 ``{"type":"token","task_id":...,"text":...}`` 回传。
+    """
+    content_parts: list[str] = []
+    tool_chunks: dict[int, dict] = {}
+    last_usage: Any = None
+
+    for chunk in model.stream(messages):
+        content = getattr(chunk, "content", "")
+        if isinstance(content, str) and content:
+            content_parts.append(content)
+            if on_event is not None:
+                on_event({"type": "token", "task_id": task_id, "text": content})
+        for tc in getattr(chunk, "tool_call_chunks", None) or []:
+            idx = tc.get("index", 0)
+            entry = tool_chunks.setdefault(idx, {"name": "", "args": "", "id": ""})
+            if tc.get("name"):
+                entry["name"] += tc["name"]
+            if tc.get("args"):
+                entry["args"] += tc["args"]
+            if tc.get("id"):
+                entry["id"] = tc["id"]
+        if getattr(chunk, "usage_metadata", None):
+            last_usage = chunk
+
+    if last_usage is not None and usage is not None:
+        usage.append(_extract_usage(last_usage))
+
+    tool_calls: list[dict] = []
+    for idx in sorted(tool_chunks):
+        entry = tool_chunks[idx]
+        try:
+            args = json.loads(entry["args"] or "{}")
+        except json.JSONDecodeError:
+            args = {}
+        tool_calls.append({"name": entry["name"], "args": args, "id": entry["id"]})
+
+    return "".join(content_parts), tool_calls
+
+
 def _live_worker(
     objective: str,
     task: Task,
@@ -174,10 +223,13 @@ def _live_worker(
     registry: CapabilityRegistry,
     gate: ConfirmationGate,
     usage: list | None = None,
+    on_event: Callable[[dict], None] | None = None,
 ) -> str:
-    """真实模型：手动 ReAct 循环，并按推理强度差异化行为。"""
+    """真实模型：手动 ReAct 循环（流式 token + 工具调用），按推理强度差异化。"""
     config = EFFORT_CONFIGS.get(task["effort"], EFFORT_CONFIGS["medium"])
-    model_with_tools = model.bind_tools(list(tools.values()), max_tokens=config.max_tokens)
+    model_with_tools = model.bind_tools(
+        list(tools.values()), max_tokens=config.max_tokens, stream_usage=True
+    )
     messages = [
         SystemMessage(content=registry.system_prompt()),
         HumanMessage(
@@ -191,12 +243,10 @@ def _live_worker(
 
     answer = ""
     for _ in range(config.max_iterations):
-        response = model_with_tools.invoke(messages)
-        _accumulate(response, usage)
-        messages.append(response)
-        tool_calls = getattr(response, "tool_calls", None)
+        text, tool_calls = _stream_chat(model_with_tools, messages, task["id"], usage, on_event)
+        messages.append(AIMessage(content=text, tool_calls=tool_calls))
         if not tool_calls:
-            answer = str(getattr(response, "content", "") or "")
+            answer = text
             break
         for tc in tool_calls:
             output = _execute_tool(tc["name"], tc["args"], tools, gate)
@@ -215,13 +265,14 @@ def run_task(
     task: Task,
     objective: str,
     usage: list | None = None,
+    on_event: Callable[[dict], None] | None = None,
 ) -> str:
     """公开入口：直接执行单个子任务（供 eval / 对照实验复用）。"""
     model = settings.build_model()
     tools = {t.name: t for t in registry.tools}
     if model is None:
         return _mock_worker(task, tools, gate)
-    return _live_worker(objective, task, model, tools, registry, gate, usage)
+    return _live_worker(objective, task, model, tools, registry, gate, usage, on_event)
 
 
 def _mock_worker(task: Task, tools: dict[str, BaseTool], gate: ConfirmationGate) -> str:
@@ -286,7 +337,7 @@ def build_graph(
             result = _mock_worker(task, tools, gate)
         else:
             result = _live_worker(
-                state["objective"], task, model, tools, registry, gate
+                state["objective"], task, model, tools, registry, gate, on_event=emit
             )
         emit({"type": "task_result", "task_id": task["id"], "result": result})
         return {"results": {task["id"]: result}}
