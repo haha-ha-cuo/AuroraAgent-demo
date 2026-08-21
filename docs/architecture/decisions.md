@@ -58,9 +58,14 @@
   - `demo_agent/experiment.py`：多维 judge（完整/准确/简洁）+ 三档对照实验，产出质量分 vs token 成本对比，含 Blender 真机任务；
   - 推理强度真实影响 worker 行为：简答 + `max_tokens` 硬截断 / 完整 / 完整 + 自评改进（见 `EFFORT_CONFIGS`）；
   - 后续 LLM 规划器落地后，用同一套 fixture 对比校准。
+- **实验发现（三档对照）**：
+  - medium 是当前事实甜点位：低→中收益显著（+0.78~+1.11），中→高平均为 0 甚至为负；
+  - high 档自评（含定向批判）未产生收益，反而可能臆造缺陷降低质量（Blender 任务 5.0→2.67）；
+  - `max_tokens` 对推理模型不强制生效，档位差异主要来自 prompt 指令。
 - **待决策项**：
+  - high 档是否保留自评，或改为「更高上限的单遍生成」/「可验证的校验（跑测试）」；
   - judge 的方差与偏差控制（多次采样 + 人工抽检）；
-  - 更细的档位策略（不同模型 / temperature）。
+  - 更细的档位策略（不同模型 / temperature / `max_completion_tokens`）。
 
 ## 待补充
 
