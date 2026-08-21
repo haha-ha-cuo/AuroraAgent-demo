@@ -70,9 +70,9 @@ uv run python -m demo_agent.experiment --task summarize_readme --tiers low,high 
 
 | 档位 | 行为差异 |
 | --- | --- |
-| low | 简答（≤60 字）+ `max_tokens=256`（尝试限制）、迭代上限 3、无 review |
-| medium | 完整回答 + `max_tokens=1024`、迭代上限 6、无 review |
-| high | 完整回答 + `max_tokens=2048`、迭代上限 6、定向批判 + 增量修补（**实验中为负收益**） |
+| low | 简答（≤60 字）+ `max_tokens=256`（尝试限制）、迭代上限 3 |
+| medium | 完整回答 + `max_tokens=1024`、迭代上限 6 |
+| high | 完整结构化回答 + `max_tokens=2048`、迭代上限 6（自评已移除，单遍生成） |
 
 > 已知问题：`max_tokens` 对 deepseek-v4-flash 这类推理模型不强制生效（实测 `max_tokens=64` 仍产出 205 输出 token），档位差异实际主要来自 prompt 指令；见下方「局限」。
 
@@ -102,6 +102,6 @@ judge 从三个维度打分（各 1-5，取平均为最终分）：**完整性 /
 - **对照实验**：多维 judge（完整/准确/简洁）+ 三档成本/质量对比（live，消耗 token），含 Blender 真机任务。
 - **局限**：
   - judge 是单一模型打分，存在方差与偏差；可靠结论需要 `--repeat` 多次取平均 + 人工抽检；
-  - `max_tokens` 对推理模型不强制生效（需 `max_completion_tokens`，langchain-openai 未暴露）；
-  - **high 档自评（含定向批判）在实验中为负收益**：中等任务 medium 已触顶，自评要么冗余扩写、要么臆造缺陷（Blender 任务因自评从 5.0 掉到 2.67）；
-  - 见 [ADR-006](decisions.md#adr-006) 待决策项。
+  - `max_tokens` 对推理模型不强制生效（实测 `max_tokens=64` 仍产出 205 token，`max_completion_tokens` 亦无效）；
+  - **high 档自评已移除（A 方案）**：实验证明自评要么冗余扩写、要么臆造缺陷（Blender 任务 5.0→2.67），medium 是事实甜点位；
+  - 见 [ADR-006](decisions.md#adr-006)。

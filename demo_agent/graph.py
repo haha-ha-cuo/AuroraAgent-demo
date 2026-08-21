@@ -32,18 +32,20 @@ _EFFORT_KEYWORDS: dict[str, tuple[str, ...]] = {
 
 @dataclass(frozen=True)
 class EffortConfig:
-    """推理强度如何影响真实 worker 行为。"""
+    """推理强度如何影响真实 worker 行为。
+
+    注：自评（review）在对照实验中为负收益，已移除（见 ADR-006）。
+    """
 
     brief: str  # 注入到子任务里的输出要求
     max_iterations: int
-    review: bool  # 是否追加一轮定向批判 + 增量修补
-    max_tokens: int  # 硬性限制单次生成的 token 上限
+    max_tokens: int  # 单次生成 token 上限（部分推理模型不强制生效）
 
 
 EFFORT_CONFIGS: dict[str, EffortConfig] = {
-    "low": EffortConfig(brief="请简明扼要地回答，不超过 60 字。", max_iterations=3, review=False, max_tokens=256),
-    "medium": EffortConfig(brief="请给出完整、准确的回答。", max_iterations=6, review=False, max_tokens=1024),
-    "high": EffortConfig(brief="请给出完整、准确且结构化的回答。", max_iterations=6, review=True, max_tokens=2048),
+    "low": EffortConfig(brief="请简明扼要地回答，不超过 60 字。", max_iterations=3, max_tokens=256),
+    "medium": EffortConfig(brief="请给出完整、准确的回答。", max_iterations=6, max_tokens=1024),
+    "high": EffortConfig(brief="请给出完整、准确且结构化的回答。", max_iterations=6, max_tokens=2048),
 }
 
 
@@ -164,55 +166,6 @@ def _accumulate(msg: Any, usage: list | None) -> None:
         usage.append(_extract_usage(msg))
 
 
-def _targeted_review(
-    model: BaseChatModel,
-    task_desc: str,
-    answer: str,
-    max_tokens: int,
-    usage: list | None,
-) -> str:
-    """定向批判：先低价找缺陷，仅在确有缺陷时做增量修补。"""
-    # 1) 批判：找出遗漏 / 错误（低 token 上限）
-    critique_resp = model.bind(max_tokens=256).invoke(
-        [
-            SystemMessage(
-                content=(
-                    "你是严谨的评审。对照任务要求，找出下面答案的缺陷。"
-                    "只输出「需要补充或修正的要点」，每条一行、尽量简短；"
-                    "若答案已完整准确，只输出一行：KEEP"
-                )
-            ),
-            HumanMessage(content=f"任务: {task_desc}\n答案:\n{answer}\n\n缺陷清单:"),
-        ]
-    )
-    _accumulate(critique_resp, usage)
-    critique = str(getattr(critique_resp, "content", "") or "").strip()
-
-    # 2) 无缺陷：直接保留原答案，避免无谓重写
-    if not critique or critique.upper().startswith("KEEP"):
-        return answer
-
-    # 3) 定向修补：只产出增量（补充/修正），追加在原答案之后，不重发原文
-    patch_resp = model.bind(max_tokens=max_tokens).invoke(
-        [
-            SystemMessage(
-                content=(
-                    "把「缺陷清单」里的补充与修正写成一小段文字。"
-                    "只写需要新增或改正的内容，不要重复原答案中已正确的部分，尽量简短。"
-                )
-            ),
-            HumanMessage(
-                content=f"任务: {task_desc}\n原答案:\n{answer}\n缺陷清单:\n{critique}\n\n补充与修正:"
-            ),
-        ]
-    )
-    _accumulate(patch_resp, usage)
-    patch = str(getattr(patch_resp, "content", "") or "").strip()
-    if not patch:
-        return answer
-    return f"{answer}\n\n补充与修正：\n{patch}"
-
-
 def _live_worker(
     objective: str,
     task: Task,
@@ -251,11 +204,6 @@ def _live_worker(
 
     if not answer:
         answer = "达到最大迭代次数，任务未完成。"
-
-    if config.review:
-        answer = _targeted_review(
-            model, task["description"], answer, config.max_tokens, usage
-        )
 
     return answer
 

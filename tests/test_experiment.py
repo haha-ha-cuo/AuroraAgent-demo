@@ -6,10 +6,8 @@ from demo_agent.graph import EFFORT_CONFIGS
 
 def test_effort_configs_cover_all_tiers():
     assert set(EFFORT_CONFIGS) == {"low", "medium", "high"}
-    assert EFFORT_CONFIGS["high"].review is True
-    assert EFFORT_CONFIGS["low"].review is False
     assert EFFORT_CONFIGS["high"].max_iterations >= EFFORT_CONFIGS["medium"].max_iterations
-    # max_tokens 硬性区分档位
+    # max_tokens 区分档位（部分推理模型不强制生效，见 ADR-006）
     assert (
         EFFORT_CONFIGS["low"].max_tokens
         < EFFORT_CONFIGS["medium"].max_tokens
