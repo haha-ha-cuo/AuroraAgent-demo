@@ -1,7 +1,7 @@
-"""只读工具集，作为 MCP 工具接入的占位。
+"""工具集，作为 MCP 工具接入的占位。
 
 真实实现中，MCP Server 暴露的工具经适配后可注册进能力特化层；
-此处用两个只读文件工具演示工具调用闭环。
+此处用只读 + 写工具演示工具调用闭环与确认门。
 """
 
 from __future__ import annotations
@@ -30,6 +30,20 @@ def _is_sensitive(name: str) -> bool:
     if n in _SENSITIVE_EXACT or (n.startswith(".env.") and n != ".env.example"):
         return True
     return any(k in n for k in _SENSITIVE_SUBSTR)
+
+
+# 工具风险分级（ADR-005）：未知工具按 execute 处理，默认拒绝。
+RISK_LEVELS: dict[str, str] = {
+    "list_files": "read",
+    "read_file": "read",
+    "write_file": "write",
+}
+_DEFAULT_RISK = "execute"
+
+
+def risk_of(tool_name: str) -> str:
+    """返回工具的风险级别。"""
+    return RISK_LEVELS.get(tool_name, _DEFAULT_RISK)
 
 
 @tool
@@ -66,4 +80,17 @@ def read_file(path: str) -> str:
         return f"读取失败: {exc}"
 
 
-DEFAULT_TOOLS = [list_files, read_file]
+@tool
+def write_file(path: str, content: str) -> str:
+    """把内容写入指定文件（覆盖写）。属于写操作，需经确认门。"""
+    p = Path(path)
+    if _is_sensitive(p.name):
+        return f"拒绝写入敏感文件: {path}"
+    try:
+        p.write_text(content, encoding="utf-8")
+        return f"已写入: {path}"
+    except Exception as exc:  # noqa: BLE001
+        return f"写入失败: {exc}"
+
+
+DEFAULT_TOOLS = [list_files, read_file, write_file]

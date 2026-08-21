@@ -15,7 +15,8 @@
 - [ ] 推理强度从启发式升级为 LLM 自适应决策
 - [ ] 打通 MCP 接入（当前 demo 以只读工具为占位）
 - [ ] 实现能力特化层接口（第一版，作用域 / 优先级 / 回退）
-- [ ] 安全权限模型：确认门 / 白名单 / dry-run / 沙箱（[ADR-005](architecture/decisions.md#adr-005)）
+- [x] 安全权限模型·确认门（风险分级 + 默认拒绝，[ADR-005](architecture/decisions.md#adr-005)）
+- [ ] 安全权限模型·白名单 / dry-run / 沙箱（[ADR-005](architecture/decisions.md#adr-005)）
 - [ ] 最小 eval 集，校准推理强度（[ADR-006](architecture/decisions.md#adr-006)）
 
 ## 阶段三：桌面壳

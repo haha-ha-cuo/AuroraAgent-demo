@@ -10,13 +10,15 @@ from __future__ import annotations
 from typing import Annotated, Any, Literal, TypedDict
 
 from langchain_core.language_models.chat_models import BaseChatModel
-from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
+from langchain_core.messages import HumanMessage, SystemMessage, ToolMessage
 from langchain_core.tools import BaseTool
 from langgraph.graph import END, START, StateGraph
 from langgraph.types import Send
 
 from .capabilities import CapabilityRegistry
+from .gate import ConfirmationGate
 from .settings import Settings
+from .tools import risk_of
 
 Effort = Literal["low", "medium", "high"]
 MAX_ITERATIONS = 6
@@ -59,7 +61,7 @@ def plan_node(state: AgentState) -> dict:
     objective: str = state["objective"]
     tasks: list[Task] = []
 
-    if any(k in objective for k in ("列出", "列表", "文件", "结构", "目录")):
+    if any(k in objective for k in ("列出", "列表", "结构", "目录", "有哪些文件")):
         tasks.append(
             {"id": "list_files", "description": "列出项目文件结构", "effort": "low"}
         )
@@ -78,6 +80,10 @@ def plan_node(state: AgentState) -> dict:
                 "description": "阅读 pyproject.toml 并总结依赖",
                 "effort": "medium",
             }
+        )
+    if any(k in objective for k in ("写入", "写文件", "创建文件", "生成文件")):
+        tasks.append(
+            {"id": "write_file", "description": "写入演示文件", "effort": "medium"}
         )
 
     if not tasks:
@@ -99,10 +105,15 @@ def dispatch_workers(state: AgentState) -> list[Send]:
     ]
 
 
-def _execute_tool(name: str, args: dict, tools: dict[str, BaseTool]) -> str:
+def _execute_tool(
+    name: str, args: dict, tools: dict[str, BaseTool], gate: ConfirmationGate
+) -> str:
     tool = tools.get(name)
     if tool is None:
         return f"未知工具: {name}"
+    risk = risk_of(name)
+    if not gate.request(f"工具 {name} 参数 {args}", risk):
+        return f"操作被确认门拒绝（risk={risk}）: {name}"
     try:
         return str(tool.invoke(args))
     except Exception as exc:  # noqa: BLE001
@@ -115,6 +126,7 @@ def _live_worker(
     model: BaseChatModel,
     tools: dict[str, BaseTool],
     registry: CapabilityRegistry,
+    gate: ConfirmationGate,
 ) -> str:
     """真实模型：手动 ReAct 循环（绑定工具 → 调用 → 执行 → 回填）。"""
     model_with_tools = model.bind_tools(list(tools.values()))
@@ -137,38 +149,54 @@ def _live_worker(
             content = getattr(response, "content", "") or ""
             return str(content)
         for tc in tool_calls:
-            output = _execute_tool(tc["name"], tc["args"], tools)
+            output = _execute_tool(tc["name"], tc["args"], tools, gate)
             messages.append(ToolMessage(content=output, tool_call_id=tc["id"]))
     return "达到最大迭代次数，任务未完成。"
 
 
-def _mock_worker(task: Task, tools: dict[str, BaseTool]) -> str:
-    """mock 模式：确定性调用工具，不依赖模型。"""
+def _mock_worker(task: Task, tools: dict[str, BaseTool], gate: ConfirmationGate) -> str:
+    """mock 模式：确定性调用工具，不依赖模型（同样经过确认门）。"""
     tid = task["id"]
     if tid == "list_files":
-        return tools["list_files"].invoke({"path": "."})
+        return _execute_tool("list_files", {"path": "."}, tools, gate)
     if tid == "read_readme":
-        content = tools["read_file"].invoke({"path": "README.md"})
+        content = _execute_tool("read_file", {"path": "README.md"}, tools, gate)
         lines = content.splitlines()[:6]
         return "已读取 README.md，摘要：\n" + "\n".join(lines)
     if tid == "read_pyproject":
-        return tools["read_file"].invoke({"path": "pyproject.toml"})
+        return _execute_tool("read_file", {"path": "pyproject.toml"}, tools, gate)
+    if tid == "write_file":
+        return _execute_tool(
+            "write_file",
+            {"path": "demo_output.txt", "content": "demo 确认门写入\n"},
+            tools,
+            gate,
+        )
     return f"(mock) 对任务「{task['description']}」返回确定性占位结果。"
 
 
 def build_graph(
-    settings: Settings, registry: CapabilityRegistry
+    settings: Settings,
+    registry: CapabilityRegistry,
+    gate: ConfirmationGate | None = None,
 ) -> Any:
-    """构建并编译委派图。"""
+    """构建并编译委派图。
+
+    ``gate`` 为 None 时使用安全默认（读放行、写/执行默认拒绝）。
+    """
     model = settings.build_model()
     tools = {t.name: t for t in registry.tools}
+    if gate is None:
+        gate = ConfirmationGate()
 
     def worker(state: AgentState) -> dict:
         task = state["task"]
         if model is None:
-            result = _mock_worker(task, tools)
+            result = _mock_worker(task, tools, gate)
         else:
-            result = _live_worker(state["objective"], task, model, tools, registry)
+            result = _live_worker(
+                state["objective"], task, model, tools, registry, gate
+            )
         return {"results": {task["id"]: result}}
 
     def report_node(state: AgentState) -> dict:
