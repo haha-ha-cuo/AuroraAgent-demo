@@ -29,12 +29,13 @@ uv --version
 
 文档环境固定使用 **Python 3.13**（见根目录 `.python-version`）。首次运行 `uv sync` 时，uv 会自动下载并隔离所需的 Python 版本，无需手动安装。
 
-## 可选工具（后续阶段预留）
+## 桌面开发工具（构建桌面壳时需要）
 
-以下工具在**后续阶段**构建前端与桌面壳时需要，现阶段可暂不安装：
+仅开发/运行 Python 运行时无需以下工具；构建 `apps/desktop/` 桌面壳（Tauri + Nuxt）时需要：
 
 - [Node.js](https://nodejs.org/)（前端构建，建议 LTS）
 - [pnpm](https://pnpm.io/)（前端依赖管理）
+- [Rust](https://rustup.rs/)（Tauri 核心；macOS 另需 Xcode Command Line Tools，Linux 需 webkit2gtk 等）
 
 ## 下一步
 

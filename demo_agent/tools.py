@@ -21,9 +21,15 @@ _IGNORED_DIRS = {
     ".uv-cache",
     ".pytest_cache",
     ".pnpm-store",
+    ".pnpm-cache",
+    ".cargo-home",
     "site",
     "__pycache__",
     "node_modules",
+    "target",
+    ".nuxt",
+    ".output",
+    "dist",
 }
 
 # 敏感文件：工具层面拒绝列举/读取，避免密钥进入模型上下文（ADR-002）。

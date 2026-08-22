@@ -13,10 +13,18 @@ __pycache__/
 # MkDocs 构建产物
 site/
 
-# 前端 / Electron
+# 前端 / Tauri
 node_modules/
 .pnpm-store/
 apps/desktop/dist/
+apps/desktop/.nuxt/
+apps/desktop/.output/
+apps/desktop/src-tauri/target/
+apps/desktop/src-tauri/gen/
+
+# 本地依赖缓存（沙箱/CI 用，落到仓库内）
+.pnpm-cache/
+.cargo-home/
 
 # 系统与编辑器
 .DS_Store

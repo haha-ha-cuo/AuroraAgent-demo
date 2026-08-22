@@ -22,14 +22,19 @@
 
 ## 阶段三：桌面壳
 
-- [x] 敲定桌面壳框架：Electron（+ React）
-- [x] 打通桌面 UI 与本地 Python 运行时的通信（WebSocket，自动拉起运行时）
+- [x] 用 Electron（+React）验证壳与 Python 运行时的通信闭环（WebSocket + 自动拉起）
 - [x] 前端交互：会话流 / 委派树可视化 / 确认门弹窗 / 事件流式输出
 - [x] 流式 token 输出（`_live_worker` 切 stream + token 事件推送到 UI）
+- [x] 敲定桌面壳选型：Tauri 2 + Nuxt（Vue3+TS，SPA），见 [ADR-007](architecture/decisions.md#adr-007)
+- [x] 桌面应用架构规划落地（[architecture/desktop.md](architecture/desktop.md)）
+- [x] 骨架落地：Tauri 2 + Nuxt(SPA) 脚手架、`server.py` 增 `--stdio` 传输、Rust stdio 中继骨架
+- [x] 前端接通 stdio 中继（`useRuntime` 接入 Tauri `invoke`/`listen`）+ MVP 交互（会话/委派树/确认门/流式）
+- [ ] Rust 核心：sidecar 监督 + 钥匙串 + 单实例
 - [ ] 生产化：会话持久化、任务树交互（取消/重试）
 
 ## 阶段四：发布分发
 
-- 三平台（macOS / Windows / Linux）打包
-- 签名、自动更新与分发渠道
+- Python sidecar 三平台打包（python-build-standalone + uv，CI 矩阵）
+- 三平台（macOS / Windows / Linux）Tauri 打包
+- 签名（macOS 公证 / Windows 签名）、自动更新与分发渠道
 - 稳定性与安全加固

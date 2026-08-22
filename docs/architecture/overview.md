@@ -47,7 +47,7 @@ flowchart TB
 
 - 承载前端 UI，负责跨平台分发（macOS / Windows / Linux）；
 - 与本地 Python 运行时通过进程间通信（IPC / 本地端口）交互；
-- 框架选型（Tauri / Electron）待定（见 [ADR](decisions.md)）。
+- 框架选型已定：Tauri 2 + Nuxt（Vue3+TS，SPA），见 [ADR-007](decisions.md#adr-007)。
 
 ### Python Agent 运行时
 
@@ -72,6 +72,7 @@ flowchart TB
 
 ## 深入阅读
 
+- [桌面应用架构](desktop.md)
 - [任务委派树](delegation-tree.md)
 - [推理强度](reasoning-effort.md)
 - [能力特化层](capability-layer.md)

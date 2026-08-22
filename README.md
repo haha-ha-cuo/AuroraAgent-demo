@@ -2,24 +2,33 @@
 
 形如 CodeX 的**全平台桌面 AI Agent 应用**：拿到一个项目后，Agent 将任务委派给子 Agent，由 Agent 自身决定委派质量（推理强度），并通过可对外扩展的**能力特化层**让用户特化 Agent 的能力。
 
-> 当前进度：**阶段一（文档站）+ 阶段二（Agent 运行时）+ 阶段三 MVP（Electron 桌面壳）**。
+> 当前进度：**阶段一（文档站）+ 阶段二（Agent 运行时）+ 阶段三（桌面壳：选型已定，脚手架待建）**。
 
 ## 技术栈
 
-LangChain Core · LangGraph · MCP · 能力特化层 · 本地 API 管理 · uv · Electron · React
+LangChain Core · LangGraph · MCP · 能力特化层 · 本地 API 管理 · uv · Tauri · Nuxt(Vue3+TS)
 
-## 桌面应用（端到端 MVP）
+## 桌面应用
 
-Electron 壳 + React 聊天 UI + Python Agent 运行时（WebSocket 联调，含委派树可视化与确认门弹窗）：
+桌面壳选型为 **Tauri 2 + Nuxt（Vue 3 + TS，SPA）**，Python Agent 运行时以 sidecar 进程打包分发（python-build-standalone + uv），进程间走 **stdio（NDJSON 中继）**。架构见 [docs/architecture/desktop.md](docs/architecture/desktop.md) 与 [ADR-007](docs/architecture/decisions.md)。
+
+脚手架位于 [`apps/desktop/`](apps/desktop/)（当前为骨架）：
 
 ```bash
-uv sync                    # Python 依赖
+# 1) Python 运行时
+uv sync
+
+# 2) 前端 + 桌面壳（Rust 侧自动拉起 --stdio sidecar）
 cd apps/desktop
-pnpm install               # 首次需下载 Electron 二进制
-pnpm dev                   # 同时起 Vite 渲染层 + Electron（自动拉起 Python 服务）
+pnpm install
+pnpm tauri dev
+
+# 也可单独跑前端（浏览器联调，直连 WS）
+pnpm dev                                            # http://127.0.0.1:3000
+uv run python -m demo_agent.server --port 8765      # 另一终端起 WS 服务
 ```
 
-> 也可单独起 Python 服务后连接：`uv run python -m demo_agent.server --port 8765`，再让渲染层连 `ws://127.0.0.1:8765/ws`。
+> 事件协议见 `demo_agent/server.py` 顶部注释；开发态前端可直连 WS，打包态走 Tauri stdio 中继。
 
 ## 最小 demo
 
@@ -69,4 +78,5 @@ uv run mkdocs serve
 
 - Python 环境统一用 [uv](https://docs.astral.sh/uv/) 管理，固定 Python 3.13（`.python-version`）。
 - 不引入 `langchain` 元包，直接用 `langchain-core` + `langgraph`（[ADR-003](docs/architecture/decisions.md)）。
+- 桌面壳新增 Rust（Tauri core）与 Nuxt/Vue3+TS 技术线，前端依赖用 pnpm 管理（[ADR-007](docs/architecture/decisions.md)）。
 - 提交与文档写作规范见 [贡献指南](docs/contributing.md)。

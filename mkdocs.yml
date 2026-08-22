@@ -76,6 +76,7 @@ nav:
       - 技术栈: overview/tech-stack.md
   - 架构设计:
       - 总体架构: architecture/overview.md
+      - 桌面应用架构: architecture/desktop.md
       - 任务委派树: architecture/delegation-tree.md
       - 推理强度: architecture/reasoning-effort.md
       - 能力特化层: architecture/capability-layer.md

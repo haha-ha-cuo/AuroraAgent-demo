@@ -69,7 +69,22 @@
   - judge 的方差与偏差控制（多次采样 + 人工抽检）；
   - 更细的档位策略（不同模型 / temperature）。
 
+## ADR-007：桌面壳选型 = Tauri 2 + Nuxt(Vue3+TS) SPA {: #adr-007 }
+
+- **状态**：已采纳
+- **背景**：阶段三 MVP 曾以 Electron（+React）验证桌面壳与 Python 运行时的通信闭环；但进入「全平台分发」阶段，Electron 打包体积大、内存占用高、webview 内默认暴露 Node 运行时，攻击面更大，需重新评估壳框架。
+- **决策**：
+  - 桌面壳改用 **Tauri 2**：Rust 核心做系统胶水（sidecar 进程监督、钥匙串、更新器、单实例），前端运行在系统 webview（WKWebView / WebView2 / WebKitGTK）。
+  - 前端改用 **Nuxt（Vue 3 + TypeScript）**，运行在 **SPA 模式（`ssr: false`）**：桌面场景无 SSR/Nitro 服务端需求，只取 Nuxt 的开发体验（文件路由、自动导入、模块生态）。
+  - Python Agent 运行时保持独立，以 **sidecar 进程**随应用打包分发，由 Rust 负责拉起与监督；进程间通信走 **stdio（NDJSON 中继，经 Rust 转发）**，运行时**不监听任何本地端口**。
+  - sidecar 打包采用 **python-build-standalone + uv**：独立可重定位 CPython + `uv pip install` 装好的站点包，作为资源目录随包分发、薄启动器拉起，不依赖系统 Python，并规避 PyInstaller 对 pydantic / langchain 动态导入的冻结风险。
+- **影响**：
+  - 仓库新增 Rust（Tauri core）与 Nuxt/Vue3+TS 两条技术线；Rust 保持薄壳，不承载业务逻辑，并承担 stdio 中继。
+  - 通信走 stdio 中继后，运行时无任何网络监听面，攻击面进一步收窄。
+  - 密钥管理上移到 Rust 侧系统钥匙串，仅以环境变量注入 sidecar，webview 不持有明文（强化 [ADR-002](#adr-002)）。
+  - Tauri 能力权限系统与确认门（[ADR-005](#adr-005)）协同，形成「webview 最小权限 + 运行时风险分级」双重防线。
+- **文档**：[桌面应用架构](desktop.md)
+
 ## 待补充
 
-- 桌面壳框架选型（Tauri / Electron）
 - 可观测与全链路 tracing 方案（OpenTelemetry / Langfuse / LangSmith）

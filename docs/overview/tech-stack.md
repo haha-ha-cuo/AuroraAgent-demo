@@ -13,12 +13,14 @@
 
 > 依赖策略见 [ADR-003](../architecture/decisions.md#adr-003)：**不引入 `langchain` 元包**，直接组合 `langchain-core` + `langgraph` + 各集成包。
 
-## 待定（后续阶段敲定）
+## 桌面壳（已确定，见 ADR-007）
 
-| 组件 | 角色 | 候选 |
+| 组件 | 角色 | 说明 |
 | --- | --- | --- |
-| 桌面壳 | 跨平台打包与分发 | Tauri / Electron |
-| 前端框架 | 桌面 UI | 随桌面壳选型确定 |
+| [Tauri 2](https://tauri.app/) | 跨平台打包与分发 | Rust 核心 + 系统 webview，sidecar 监督、钥匙串、更新器（[ADR-007](../architecture/decisions.md#adr-007)） |
+| [Nuxt](https://nuxt.com/) | 桌面 UI | Vue 3 + TypeScript，SPA 模式（`ssr: false`），产物交 Tauri 打包 |
+
+> Python Agent 运行时以 **sidecar** 形式随应用分发，经 **stdio（NDJSON 中继，由 Rust 转发）** 与前端通信，不监听本地端口；sidecar 用 **python-build-standalone + uv** 打包。详见[桌面应用架构](../architecture/desktop.md)。
 
 ## 各组件如何协作
 

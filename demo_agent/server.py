@@ -1,6 +1,11 @@
-"""FastAPI + WebSocket 服务：把 Agent 运行时暴露给桌面 UI。
+"""Agent 运行时服务：把 Agent 运行时暴露给桌面 UI。
 
-协议（JSON）：
+两种传输：
+- WebSocket（``--port``）：独立开发联调。
+- stdio（``--stdio``）：桌面宿主（Rust core）以子进程方式拉起，经 stdin/stdout 用
+  NDJSON（每行一个 JSON 对象）中继同一套事件协议，不监听任何本地端口。
+
+事件协议（JSON，两种传输共用）：
   UI → server: {"type":"run","objective":"..."}
                {"type":"confirm","request_id":"...","approved":true|false}
   server → UI: {"type":"hello","mode","model"}
@@ -14,13 +19,16 @@
                {"type":"error","message"}
                {"type":"confirm_request","request_id","action","risk"}
 
-运行：``uv run python -m demo_agent.server [--port 8765]``
+运行：
+  uv run python -m demo_agent.server --port 8765   # WebSocket 服务
+  uv run python -m demo_agent.server --stdio       # stdio 传输（供宿主中继）
 """
 
 from __future__ import annotations
 
 import asyncio
 import json
+import sys
 import threading
 from typing import Any, Callable
 
@@ -159,14 +167,90 @@ async def _run_agent(
         emit({"type": "error", "message": f"{type(exc).__name__}: {exc}"})
 
 
+async def serve_stdio(settings: Settings | None = None) -> None:
+    """stdio 传输：在 stdin/stdout 上跑 NDJSON 事件协议，供桌面宿主（Rust）中继。
+
+    与 WS 版结构一致：确认门阻塞等待 UI 回复，图在后台线程执行，事件经 outbox 写出。
+    """
+    settings = settings or Settings.from_env()
+    loop = asyncio.get_running_loop()
+
+    reader = asyncio.StreamReader()
+    reader_protocol = asyncio.StreamReaderProtocol(reader)
+    await loop.connect_read_pipe(lambda: reader_protocol, sys.stdin)
+
+    write_transport, write_protocol = await loop.connect_write_pipe(
+        asyncio.streams.FlowControlMixin, sys.stdout
+    )
+    writer = asyncio.StreamWriter(write_transport, write_protocol, reader, loop)
+
+    outbox: asyncio.Queue = asyncio.Queue()
+
+    def emit(event: dict) -> None:
+        loop.call_soon_threadsafe(outbox.put_nowait, event)
+
+    gate = DeferredConfirmationGate(emit)
+    registry = _default_registry()
+
+    async def send_outbox() -> None:
+        while True:
+            event = await outbox.get()
+            line = json.dumps(event, ensure_ascii=False) + "\n"
+            writer.write(line.encode("utf-8"))
+            await writer.drain()
+
+    sender = asyncio.create_task(send_outbox())
+    tasks: set[asyncio.Task] = set()
+    outbox.put_nowait({"type": "hello", "mode": settings.mode, "model": settings.model})
+
+    async def handle(message: dict) -> None:
+        mtype = message.get("type")
+        if mtype == "run":
+            objective = str(message.get("objective", ""))
+            task = asyncio.create_task(
+                _run_agent(objective, settings, registry, gate, emit)
+            )
+            tasks.add(task)
+            task.add_done_callback(tasks.discard)
+        elif mtype == "confirm":
+            gate.respond(
+                str(message.get("request_id", "")), bool(message.get("approved", False))
+            )
+
+    try:
+        while True:
+            line = await reader.readline()
+            if not line:
+                break
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                message = json.loads(line)
+            except json.JSONDecodeError:
+                emit({"type": "error", "message": "invalid json"})
+                continue
+            await handle(message)
+    finally:
+        sender.cancel()
+        for task in list(tasks):
+            task.cancel()
+
+
 def main() -> None:
     import argparse
 
     parser = argparse.ArgumentParser(description="demo-agent runtime server")
+    parser.add_argument(
+        "--stdio", action="store_true", help="stdio 传输（NDJSON，供桌面宿主中继）"
+    )
     parser.add_argument("--port", type=int, default=DEFAULT_PORT)
     parser.add_argument("--host", default="127.0.0.1")
     args = parser.parse_args()
-    uvicorn.run(create_app(), host=args.host, port=args.port)
+    if args.stdio:
+        asyncio.run(serve_stdio())
+    else:
+        uvicorn.run(create_app(), host=args.host, port=args.port)
 
 
 if __name__ == "__main__":
