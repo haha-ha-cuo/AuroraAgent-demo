@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 import asyncio
+from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
-from typing import Any, AsyncIterator
+from typing import Any
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 
@@ -19,9 +20,7 @@ def create_app(service: AgentService) -> FastAPI:
 
     @app.get("/health")
     async def health() -> dict[str, Any]:
-        return (await service.handle({
-            "protocol_version": 1, "request_id": "health", "method": "runtime.status", "params": {}
-        }))["result"]
+        return (await service.handle({"protocol_version": 1, "request_id": "health", "method": "runtime.status", "params": {}}))["result"]
 
     @app.websocket("/ws")
     async def websocket_endpoint(websocket: WebSocket) -> None:

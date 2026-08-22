@@ -22,4 +22,14 @@ packages = ["demo_agent"]
 [dependency-groups]
 dev = [
     "pytest>=8",
+    "ruff>=0.16.4",
 ]
+
+[tool.ruff]
+line-length = 160
+target-version = "py313"
+extend-exclude = ["tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "W", "UP", "B", "SIM"]
+ignore = ["E501"]

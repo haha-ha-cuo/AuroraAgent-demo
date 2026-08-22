@@ -41,7 +41,6 @@ class DocumentParserPort(ABC):
 class OpenAiModelAdapter(ModelPort):
     async def stream(self, messages: list[dict[str, str]]) -> AsyncIterator[str]:
         raise NotImplementedError("OpenAI production adapter is not implemented")
-        yield ""  # pragma: no cover
 
 
 class McpAdapter(McpPort):

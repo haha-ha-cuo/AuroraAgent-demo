@@ -2,6 +2,7 @@ import type {
   AttachmentRef,
   ConversationMessage,
   ModelSettings,
+  ProjectRecord,
   RunRecord,
   RuntimeInfo,
   SessionRecord,
@@ -57,13 +58,24 @@ export function normalizeTask(raw: Json, sessionId: string, runId = ''): TaskNod
   }
 }
 
+export function normalizeProject(raw: Json): ProjectRecord {
+  return {
+    id: text(raw.id),
+    name: text(raw.name, '未命名项目'),
+    createdAt: text(raw.created_at ?? raw.createdAt, new Date().toISOString()),
+    updatedAt: text(raw.updated_at ?? raw.updatedAt, new Date().toISOString()),
+  }
+}
+
 export function normalizeSession(raw: Json): SessionRecord {
   const id = text(raw.id)
   const runs = list(raw.runs).map((item) => normalizeRun(item, id))
   const latestRun = runs.at(-1)?.id ?? ''
   const nestedTasks = list(raw.runs).flatMap((run) => list(run.tasks).map((item) => normalizeTask(item, id, text(run.id))))
   return {
-    id, title: text(raw.title, '未命名会话'),
+    id,
+    title: text(raw.title, '未命名会话'),
+    projectId: text(raw.project_id ?? raw.projectId) || null,
     createdAt: text(raw.created_at ?? raw.createdAt, new Date().toISOString()),
     updatedAt: text(raw.updated_at ?? raw.updatedAt, new Date().toISOString()),
     status: raw.status ?? raw.run_status ?? runs.at(-1)?.status ?? 'idle',
@@ -84,7 +96,7 @@ export function normalizeRuntime(raw: Json): RuntimeInfo {
 export function normalizeSettings(raw: Json): ModelSettings {
   return {
     provider: text(raw.provider, 'mock'), baseUrl: text(raw.base_url ?? raw.baseUrl),
-    model: text(raw.model, 'deterministic-mock'), hasApiKey: Boolean(raw.has_api_key ?? raw.api_key_configured ?? raw.hasApiKey),
+    model: text(raw.model, 'mock-agent-v1'), hasApiKey: Boolean(raw.has_api_key ?? raw.api_key_configured ?? raw.hasApiKey),
     mockMode: Boolean(raw.mock_mode ?? raw.mockMode ?? raw.provider === 'mock'),
   }
 }

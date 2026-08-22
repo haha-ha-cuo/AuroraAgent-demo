@@ -11,15 +11,11 @@ export const useSessionStore = defineStore('sessions', {
     activeSessionId: null as string | null,
     loaded: false,
     loading: false,
-    query: '',
   }),
   getters: {
     activeSession: (state) => state.sessions.find((item) => item.id === state.activeSessionId),
-    recentSessions(state): SessionRecord[] {
-      const needle = state.query.trim().toLocaleLowerCase()
-      return [...state.sessions]
-        .filter((item) => !needle || item.title.toLocaleLowerCase().includes(needle))
-        .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
+    sorted(state): SessionRecord[] {
+      return [...state.sessions].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
     },
     isRunning: (state) => (sessionId: string) => state.sessions.some((item) => item.id === sessionId && ['running', 'waiting', 'queued'].includes(item.status)),
   },
@@ -62,8 +58,8 @@ export const useSessionStore = defineStore('sessions', {
       const result = await runtimeRequest<any>('session.get', { session_id: id })
       return this.upsert(unwrap(result, 'session'))
     },
-    async create(title = '新对话') {
-      const result = await runtimeRequest<any>('session.create', { title })
+    async create(title = '新对话', projectId?: string | null) {
+      const result = await runtimeRequest<any>('session.create', { title, project_id: projectId || undefined })
       const session = this.upsert(unwrap(result, 'session'))
       this.activeSessionId = session.id
       return session

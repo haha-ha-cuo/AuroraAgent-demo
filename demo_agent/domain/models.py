@@ -6,6 +6,9 @@ from enum import StrEnum
 from typing import Any
 from uuid import uuid4
 
+DEFAULT_PROJECT_ID = "project_default"
+DEFAULT_PROJECT_NAME = "默认项目"
+
 
 def new_id(prefix: str) -> str:
     return f"{prefix}_{uuid4().hex}"
@@ -34,11 +37,23 @@ class TaskStatus(StrEnum):
 
 
 @dataclass(slots=True)
+class Project:
+    id: str
+    name: str
+    created_at: str
+    updated_at: str
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+
+@dataclass(slots=True)
 class Session:
     id: str
     title: str
     created_at: str
     updated_at: str
+    project_id: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)

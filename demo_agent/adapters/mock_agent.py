@@ -12,8 +12,6 @@ class PlanState(TypedDict):
 
 
 class MockAgent:
-    """Deterministic LangGraph-backed planner and worker used without credentials."""
-
     def __init__(self, step_delay: float = 0.01) -> None:
         self.step_delay = step_delay
         graph = StateGraph(PlanState)

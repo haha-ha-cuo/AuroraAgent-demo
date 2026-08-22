@@ -1,5 +1,3 @@
-"""Aurora Agent local runtime."""
-
 from .application.service import AgentService
 from .protocol import PROTOCOL_VERSION, ProtocolError
 

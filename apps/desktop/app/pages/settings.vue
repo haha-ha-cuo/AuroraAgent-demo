@@ -1,12 +1,12 @@
 <script setup lang="ts">
-import { NButton, NCard, NDescriptions, NDescriptionsItem, NForm, NFormItem, NIcon, NInput, NRadioButton, NRadioGroup, NSelect, NSwitch, NTag, useDialog, useMessage } from 'naive-ui'
+import { NButton, NCard, NDescriptions, NDescriptionsItem, NForm, NFormItem, NIcon, NInput, NRadioButton, NRadioGroup, NSelect, NTag, useDialog, useMessage } from 'naive-ui'
 import { Database, DeviceDesktop, Refresh, ShieldLock, Trash } from '@vicons/tabler'
 import type { ThemePreference } from '~/types/agent'
 
 const sessions = useSessionStore(); const runtime = useRuntimeStore(); const ui = useUiStore()
 const dialog = useDialog(); const message = useMessage(); const saving = ref(false); const restarting = ref(false)
-const form = reactive({ provider: 'mock', baseUrl: '', model: '', mockMode: true, apiKey: '' })
-watch(() => runtime.settings, (settings) => Object.assign(form, { provider: settings.provider, baseUrl: settings.baseUrl, model: settings.model, mockMode: settings.mockMode, apiKey: '' }), { immediate: true, deep: true })
+const form = reactive({ provider: 'mock', baseUrl: '', model: '', apiKey: '' })
+watch(() => runtime.settings, (settings) => Object.assign(form, { provider: settings.provider, baseUrl: settings.baseUrl, model: settings.model, apiKey: '' }), { immediate: true, deep: true })
 useHead({ title: '设置' })
 
 async function save() {
@@ -37,7 +37,7 @@ function confirmClear() {
           </div>
           <NFormItem label="Base URL"><NInput v-model:value="form.baseUrl" placeholder="https://api.openai.com/v1" /></NFormItem>
           <NFormItem label="API Key"><NInput v-model:value="form.apiKey" type="password" show-password-on="click" :placeholder="runtime.settings.hasApiKey ? '已存入系统钥匙串；留空保持不变' : '仅写入系统钥匙串'" autocomplete="new-password" /></NFormItem>
-          <div class="form-actions"><span><NSwitch v-model:value="form.mockMode" size="small" /> 确定性 Mock 模式</span><NButton type="primary" :loading="saving" @click="save">保存设置</NButton></div>
+          <div class="form-actions"><span>Provider 选择「Mock」即启用确定性 Mock 模式</span><NButton type="primary" :loading="saving" @click="save">保存设置</NButton></div>
         </NForm>
       </NCard>
 

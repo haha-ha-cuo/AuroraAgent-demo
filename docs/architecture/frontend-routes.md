@@ -4,7 +4,7 @@
 
 ## 共同约束
 
-- Nuxt 运行在 SPA 模式，页面路由保持 `/`、`/sessions/:sessionId`、`/settings` 三项。
+- Nuxt 运行在 SPA 模式，页面路由为 `/`、`/projects/:projectId`、`/sessions/:sessionId`、`/settings`。
 - Python SQLite 是会话、消息、运行、任务、附件和非敏感设置的唯一事实源；Pinia 仅缓存后端快照与实时事件。
 - `localStorage` 只保存主题、侧栏折叠等 UI 偏好与旧数据迁移标记，不再保存会话副本。
 - 前端领域对象使用 camelCase；所有 wire envelope 和 payload 使用 snake_case。转换只在运行时客户端/Store 边界发生。
@@ -15,11 +15,12 @@
 
 | 路径 | 参数 | 页面职责 | 数据来源 | 空状态与失败行为 |
 | --- | --- | --- | --- | --- |
-| `/` | 无 | 新建会话；展示空状态、附件和目标输入框 | `runtime.status`、`session.list`、`session.create`、`run.start` | 无历史时显示引导；断线时禁用提交并提供重连/重启入口；创建成功后跳转详情页 |
+| `/` | 无 | 新建对话（默认项目）；展示空状态、附件和目标输入框 | `runtime.status`、`project.list`、`session.create`、`run.start` | 无历史时显示引导；断线时禁用提交并提供重连/重启入口；创建成功后跳转详情页 |
+| `/projects/:projectId` | `projectId: string`，由后端创建 | 项目工作区：发起新对话并浏览项目内对话 | `project.get`、`session.list`、`session.create` | 项目不存在返回“项目不存在”；断线时禁用提交 |
 | `/sessions/:sessionId` | `sessionId: string`，由后端创建 | 连续对话、消息流、运行状态、停止/重试、确认门、附件引用、递归委派树与任务详情 | `session.get` 快照及该会话的实时事件 | 不存在返回明确的“会话不存在”；运行失败保留消息与任务，提供重试；运行取消显示终态而非错误 |
 | `/settings` | 无 | 主题、Provider、Base URL、模型、API Key 状态、runtime 重启、数据库信息和历史清理 | `settings.get/update`、`runtime.status/restart` | 保存失败保留表单；钥匙串不可用时明确提示；清理历史必须二次确认 |
 
-最近会话、会话搜索、时间分组和委派树属于 `AppShell`，不注册额外页面。小窗口可将侧栏折叠为图标栏或抽屉，但路由和数据行为不变。
+项目分组、会话列表和委派树属于 `AppShell`，不注册额外页面。侧栏以项目为单位、对话为子结构展示，支持手动收缩为图标栏；小窗口自动折叠，路由和数据行为不变。
 
 ## `/`：新建会话
 
@@ -78,9 +79,10 @@
 
 ## 侧栏数据行为
 
-- `session.list` 返回摘要，前端按更新时间分组并在本地对已加载摘要做搜索过滤。
-- 重命名调用 `session.rename`，删除调用 `session.delete` 并二次确认。
-- `session.updated` 触发摘要 upsert；删除当前会话后导航 `/`。
+- `project.list` 返回项目摘要，`session.list` 返回带 `project_id` 的会话摘要，前端按项目分组展示；不再提供会话搜索。
+- 新建项目调用 `project.create`，重命名 `project.rename`，删除 `project.delete`（级联删除项目内对话）并二次确认。
+- 新建对话调用 `session.create` 并携带 `project_id`，重命名 `session.rename`，删除 `session.delete` 并二次确认。
+- `project.updated` 与 `session.updated` 触发对应 upsert/删除；删除当前会话后导航 `/`。
 - 会话运行标记按 `session_id` 更新，因此用户切换页面不会停止后台运行。
 - 委派树只展示当前会话当前/选中运行的任务，不混入其他会话事件。
 

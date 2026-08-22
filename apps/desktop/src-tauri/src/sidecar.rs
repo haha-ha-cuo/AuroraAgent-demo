@@ -2,7 +2,7 @@
 
 use std::collections::HashMap;
 use std::io::{BufRead, BufReader, Write};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::{Child, ChildStdin, Command, Stdio};
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{mpsc, Arc, Mutex};
@@ -10,7 +10,7 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use serde::Serialize;
 use serde_json::{json, Value};
-use tauri::{AppHandle, Emitter};
+use tauri::{AppHandle, Emitter, Manager};
 
 const PROTOCOL_VERSION: u64 = 1;
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(30);
@@ -48,6 +48,7 @@ struct ManagedProcess {
 
 struct BrokerInner {
     app: AppHandle,
+    resource_dir: PathBuf,
     process: Mutex<Option<ManagedProcess>>,
     pending: Mutex<HashMap<String, mpsc::Sender<Reply>>>,
     status: Mutex<RuntimeStatus>,
@@ -65,7 +66,8 @@ impl RuntimeBroker {
     pub fn new(app: AppHandle) -> Self {
         Self {
             inner: Arc::new(BrokerInner {
-                app,
+                app: app.clone(),
+                resource_dir: app.path().resource_dir().unwrap_or_default(),
                 process: Mutex::new(None),
                 pending: Mutex::new(HashMap::new()),
                 status: Mutex::new(RuntimeStatus::default()),
@@ -136,7 +138,7 @@ impl RuntimeBroker {
     fn spawn_locked(&self, restarted: bool) -> Result<(), String> {
         set_status(&self.inner, "starting", None, None, restarted);
         let generation = self.inner.generation.fetch_add(1, Ordering::SeqCst) + 1;
-        let (mut command, cwd) = runtime_command();
+        let (mut command, cwd) = runtime_command(&self.inner.resource_dir);
         command
             .current_dir(cwd)
             .stdin(Stdio::piped())
@@ -399,7 +401,7 @@ fn validate_request(request: &Value) -> Result<(), String> {
     Ok(())
 }
 
-fn runtime_command() -> (Command, PathBuf) {
+fn runtime_command(resource_dir: &Path) -> (Command, PathBuf) {
     if let Ok(executable) = std::env::var("DEMO_AGENT_SIDECAR") {
         let path = PathBuf::from(executable);
         let cwd = path
@@ -409,6 +411,15 @@ fn runtime_command() -> (Command, PathBuf) {
         let mut command = Command::new(path);
         command.arg("--stdio");
         return (command, cwd);
+    }
+
+    let sidecar = resource_dir.join("sidecar");
+    let python = sidecar.join("python").join(if cfg!(windows) { "python.exe" } else { "bin/python3" });
+    if python.exists() {
+        let mut command = Command::new(python);
+        command.args(["-m", "demo_agent", "--stdio"]);
+        command.env("PYTHONPATH", sidecar.join("site-packages"));
+        return (command, resource_dir.to_path_buf());
     }
 
     let repo_root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))

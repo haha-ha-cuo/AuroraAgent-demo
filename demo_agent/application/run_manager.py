@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 from collections.abc import Awaitable, Callable
+from contextlib import suppress
 from typing import Any
 
 from demo_agent.adapters.mock_agent import MockAgent
@@ -28,7 +29,6 @@ class RunManager:
     async def start(self, session_id: str, objective: str, attachments: list[dict[str, Any]] | None = None) -> dict[str, Any]:
         if session_id in self._session_runs:
             raise ProtocolError("run_conflict", "this session already has an active run", {"run_id": self._session_runs[session_id]})
-        # Verify existence before writing related records.
         self.repository.get_session(session_id)
         run = Run(new_id("run"), session_id, objective)
         message = Message(new_id("msg"), session_id, "user", objective, run_id=run.id)
@@ -47,13 +47,15 @@ class RunManager:
             path = item.get("path")
             if not isinstance(path, str) or not path:
                 raise ProtocolError("invalid_params", "attachment path is required")
-            normalized.append({
-                "id": str(item.get("id") or new_id("att")),
-                "path": path,
-                "name": str(item.get("name") or path.replace("\\", "/").rsplit("/", 1)[-1]),
-                "size": item.get("size"),
-                "mime_type": item.get("mime_type"),
-            })
+            normalized.append(
+                {
+                    "id": str(item.get("id") or new_id("att")),
+                    "path": path,
+                    "name": str(item.get("name") or path.replace("\\", "/").rsplit("/", 1)[-1]),
+                    "size": item.get("size"),
+                    "mime_type": item.get("mime_type"),
+                }
+            )
         return normalized
 
     async def _execute(self, run: Run) -> None:
@@ -65,18 +67,28 @@ class RunManager:
             key_to_id = {str(item["key"]): new_id("task") for item in raw_tasks}
             tasks = [
                 AgentTask(
-                    id=key_to_id[str(item["key"])], run_id=run.id, session_id=run.session_id,
+                    id=key_to_id[str(item["key"])],
+                    run_id=run.id,
+                    session_id=run.session_id,
                     parent_id=key_to_id.get(str(item["parent_key"])) if item.get("parent_key") else None,
-                    description=str(item["description"]), effort=str(item["effort"]), position=index,
+                    description=str(item["description"]),
+                    effort=str(item["effort"]),
+                    position=index,
                 )
                 for index, item in enumerate(raw_tasks)
             ]
             self.repository.add_tasks(tasks)
-            await self.emit(event("plan.created", {"tasks": [task.to_dict() for task in tasks]}, session_id=run.session_id, run_id=run.id))
+            await self.emit(
+                event(
+                    "plan.created",
+                    {"tasks": [task.to_dict() for task in tasks]},
+                    session_id=run.session_id,
+                    run_id=run.id,
+                )
+            )
             for task in tasks:
                 await self.emit(event("task.created", {"task": task.to_dict()}, session_id=run.session_id, run_id=run.id))
 
-            # Execute each dependency-ready layer concurrently. Children wait for their parent.
             pending = {task.id: task for task in tasks}
             completed: set[str] = set()
             output_by_id: dict[str, str] = {}
@@ -84,9 +96,7 @@ class RunManager:
                 ready = [task for task in pending.values() if task.parent_id is None or task.parent_id in completed]
                 if not ready:
                     raise RuntimeError("task graph contains an unresolved dependency cycle")
-                results = await asyncio.gather(
-                    *(self._execute_task(run, task) for task in ready), return_exceptions=True
-                )
+                results = await asyncio.gather(*(self._execute_task(run, task) for task in ready), return_exceptions=True)
                 first_error = next((result for result in results if isinstance(result, Exception)), None)
                 if first_error is not None:
                     raise first_error
@@ -101,8 +111,22 @@ class RunManager:
             report = self.agent.report(run.objective, outputs)
             message = Message(assistant_id, run.session_id, "assistant", report, run_id=run.id)
             self.repository.add_message(message)
-            await self.emit(event("message.created", {"message": {**message.to_dict(), "content": "", "status": "streaming"}}, session_id=run.session_id, run_id=run.id))
-            await self.emit(event("message.delta", {"message_id": assistant_id, "delta": report}, session_id=run.session_id, run_id=run.id))
+            await self.emit(
+                event(
+                    "message.created",
+                    {"message": {**message.to_dict(), "content": "", "status": "streaming"}},
+                    session_id=run.session_id,
+                    run_id=run.id,
+                )
+            )
+            await self.emit(
+                event(
+                    "message.delta",
+                    {"message_id": assistant_id, "delta": report},
+                    session_id=run.session_id,
+                    run_id=run.id,
+                )
+            )
             await self.emit(event("message.completed", {"message": message.to_dict()}, session_id=run.session_id, run_id=run.id))
             self.repository.update_run(run.id, RunStatus.COMPLETED)
             self._release(run)
@@ -117,24 +141,40 @@ class RunManager:
             self.repository.update_run(run.id, RunStatus.FAILED, message)
             failed_task_ids = self._fail_incomplete_tasks(run.id, message)
             error_message = Message(
-                new_id("msg"), run.session_id, "system", f"运行失败：{message}",
-                status="failed", run_id=run.id,
+                new_id("msg"),
+                run.session_id,
+                "system",
+                f"运行失败：{message}",
+                status="failed",
+                run_id=run.id,
             )
             stored_error_message = self.repository.add_message(error_message)
             self._release(run)
             for task_id in failed_task_ids:
-                await self.emit(event(
-                    "task.failed", {"task_id": task_id, "error": message},
-                    session_id=run.session_id, run_id=run.id,
-                ))
-            await self.emit(event(
-                "message.created", {"message": stored_error_message},
-                session_id=run.session_id, run_id=run.id,
-            ))
-            await self.emit(event(
-                "message.completed", {"message": stored_error_message},
-                session_id=run.session_id, run_id=run.id,
-            ))
+                await self.emit(
+                    event(
+                        "task.failed",
+                        {"task_id": task_id, "error": message},
+                        session_id=run.session_id,
+                        run_id=run.id,
+                    )
+                )
+            await self.emit(
+                event(
+                    "message.created",
+                    {"message": stored_error_message},
+                    session_id=run.session_id,
+                    run_id=run.id,
+                )
+            )
+            await self.emit(
+                event(
+                    "message.completed",
+                    {"message": stored_error_message},
+                    session_id=run.session_id,
+                    run_id=run.id,
+                )
+            )
             await self.emit(event("run.failed", {"error": message}, session_id=run.session_id, run_id=run.id))
         finally:
             self._release(run)
@@ -169,10 +209,19 @@ class RunManager:
         self._approvals[request_id] = (future, run.id)
         self.repository.update_run(run.id, RunStatus.WAITING)
         self.repository.update_task(task.id, TaskStatus.WAITING)
-        await self.emit(event("approval.requested", {
-            "request_id": request_id, "task_id": task.id,
-            "action": task.description, "risk": "mock sensitive operation",
-        }, session_id=run.session_id, run_id=run.id))
+        await self.emit(
+            event(
+                "approval.requested",
+                {
+                    "request_id": request_id,
+                    "task_id": task.id,
+                    "action": task.description,
+                    "risk": "mock sensitive operation",
+                },
+                session_id=run.session_id,
+                run_id=run.id,
+            )
+        )
         try:
             approved = await asyncio.wait_for(future, self.approval_timeout)
         except TimeoutError as exc:
@@ -180,7 +229,14 @@ class RunManager:
         finally:
             self._approvals.pop(request_id, None)
         self.repository.update_run(run.id, RunStatus.RUNNING)
-        await self.emit(event("approval.resolved", {"request_id": request_id, "approved": approved}, session_id=run.session_id, run_id=run.id))
+        await self.emit(
+            event(
+                "approval.resolved",
+                {"request_id": request_id, "approved": approved},
+                session_id=run.session_id,
+                run_id=run.id,
+            )
+        )
         return approved
 
     async def resolve_approval(self, request_id: str, approved: bool) -> dict[str, Any]:
@@ -196,10 +252,8 @@ class RunManager:
         if job is None or job.done():
             raise ProtocolError("run_not_active", "run is not active")
         job.cancel()
-        try:
+        with suppress(asyncio.CancelledError):
             await job
-        except asyncio.CancelledError:
-            pass
         return self.repository.get_run(run_id)
 
     async def retry(self, run_id: str, task_id: str | None = None) -> dict[str, Any]:

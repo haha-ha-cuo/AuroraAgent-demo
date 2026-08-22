@@ -1,7 +1,9 @@
 <script setup lang="ts">
 import { NLayout, NLayoutContent, NLayoutSider } from 'naive-ui'
 
+const ui = useUiStore()
 const compact = ref(false)
+const collapsed = computed(() => compact.value || ui.sidebarCollapsed)
 let compactQuery: MediaQueryList | null = null
 
 function syncCompact(event?: MediaQueryListEvent) {
@@ -21,11 +23,11 @@ onBeforeUnmount(() => compactQuery?.removeEventListener('change', syncCompact))
   <NLayout class="app-shell" has-sider>
     <NLayoutSider
       class="app-sider"
-      :width="compact ? 68 : 280"
+      :width="collapsed ? 68 : 280"
       :native-scrollbar="false"
       bordered
     >
-      <AppSidebar />
+      <AppSidebar :collapsed="collapsed" />
     </NLayoutSider>
     <NLayoutContent class="app-content" content-style="height: 100%; overflow: hidden;">
       <slot />

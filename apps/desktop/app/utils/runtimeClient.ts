@@ -74,7 +74,9 @@ export async function runtimeRequest<T>(method: string, params: Record<string, u
 
 export async function restartRuntimeBroker(): Promise<void> {
   if (isTauri()) { await invoke('runtime_restart'); return }
-  await runtimeRequest('runtime.restart')
+  socket?.close()
+  socket = null
+  await connectRuntime()
 }
 
 export function onRuntimeEvent(handler: EventHandler): () => void {

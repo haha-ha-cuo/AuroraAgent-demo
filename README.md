@@ -6,6 +6,7 @@ Aurora Agent Demo 是一套面向桌面的多 Agent 工作台。用户提交目�
 
 ## 核心能力
 
+- 项目为单位、对话为子结构的分组工作台
 - 连续对话与多会话后台并行
 - 同一会话单运行互斥、停止和失败重试
 - 递归委派树、任务状态和流式输出
@@ -35,10 +36,10 @@ AuroraAgent-demo/
 │  └─ src-tauri/                 # Rust sidecar broker
 ├─ apps/docs/                    # 文档站（组件同样使用独立目录）
 ├─ demo_agent/
-│  ├─ domain/                    # 会话、运行、任务等领域模型
-│  ├─ application/               # 应用服务与运行调度
+│  ├─ domain/                    # 项目、会话、运行、任务等领域模型
+│  ├─ application/               # 应用服务、运行调度与配置解析
 │  ├─ ports/                     # Model、MCP、KV、文档解析端口
-│  ├─ adapters/                  # SQLite 与 Mock Agent 适配器
+│  ├─ adapters/                  # SQLite schema/仓储与 Mock Agent 适配器
 │  └─ transport/                 # stdio / WebSocket 传输
 ├─ docs/architecture/            # 协议、桌面架构与路由文档
 └─ tests/                        # Python runtime 测试
@@ -69,24 +70,21 @@ Rust broker 会通过 stdio 自动启动 Python runtime。默认使用 Mock Prov
 
 ## 浏览器联调
 
-分别启动 Python WebSocket runtime 和 Nuxt：
+`pnpm dev` 会在启动 Nuxt 时自动拉起 Python WebSocket runtime（端口 8765）：
 
 ```bash
-# 终端一：仓库根目录
-uv run python -m demo_agent --port 8765
-
-# 终端二
 cd apps/desktop
 pnpm dev
 ```
 
-访问 `http://127.0.0.1:3000`。如需修改 WebSocket 地址，可设置 `VITE_RUNTIME_WS`。
+访问 `http://127.0.0.1:3000`。如需改用自定义 WebSocket 地址，设置 `VITE_RUNTIME_WS` 即可跳过自动拉起。
 
 ## 页面路由
 
 | 路径 | 用途 |
 | --- | --- |
-| `/` | 新建会话与空状态 |
+| `/` | 新建对话（默认项目）与空状态 |
+| `/projects/:projectId` | 项目工作区：发起新对话并浏览项目内对话 |
 | `/sessions/:sessionId` | 连续对话、任务执行与确认操作 |
 | `/settings` | 主题、模型、运行时和本地数据管理 |
 
@@ -97,6 +95,9 @@ pnpm dev
 ```bash
 # Python
 uv run pytest
+
+# 后端代码检查（ruff + 每文件 ≤350 行）
+bash scripts/lint.sh
 
 # 前端
 cd apps/desktop
@@ -110,11 +111,22 @@ cargo test --locked
 cargo check --locked
 ```
 
+## 打包 sidecar
+
+桌面分发需要随应用携带自包含 Python runtime，避免依赖系统 Python：
+
+```bash
+bash scripts/build-sidecar.sh
+```
+
+脚本用 python-build-standalone + uv 生成 `apps/desktop/src-tauri/resources/sidecar/`（独立 CPython + 站点包），Tauri 打包时作为 `bundle.resources` 随应用分发；Rust broker 优先使用该运行时，缺失时才回退到 `uv run` 开发模式。
+
 ## 数据与安全
 
-- SQLite 是会话数据的唯一事实源。
-- `localStorage` 只保存主题等界面偏好和旧数据迁移标记。
-- API Key 不进入 SQLite、Pinia、日志或 Agent 事件，只由 Rust 写入系统钥匙串。
+- SQLite 是项目、会话、消息、运行、任务与非敏感配置的唯一事实源。
+- 非敏感配置（Provider、Base URL、模型）以 SQLite 应用设置为准，`.env` 仅作为浏览器开发时的初始默认值。
+- API Key 不进入 SQLite、Pinia、日志或 Agent 事件，只由 Rust 写入系统钥匙串（开发时经 `.env` 或进程注入）。
+- `localStorage` 只保存主题、侧栏折叠等界面偏好和旧数据迁移标记。
 - 附件首版只保存用户主动选择的本地路径与元数据，不自动读取或上传内容。
 - OpenAI、MCP、KV cache 和文档解析的生产适配器目前为明确占位；Mock 流程可完整运行。
 

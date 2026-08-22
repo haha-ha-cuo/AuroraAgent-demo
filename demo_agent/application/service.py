@@ -8,22 +8,20 @@ from typing import Any
 from demo_agent.adapters.mock_agent import MockAgent
 from demo_agent.adapters.sqlite_repository import SqliteRepository
 from demo_agent.application.run_manager import RunManager
-from demo_agent.domain.models import Session, new_id, utc_now
+from demo_agent.application.settings import api_key_configured, load_environment, resolve_settings
+from demo_agent.domain.models import DEFAULT_PROJECT_ID, Project, Session, new_id, utc_now
 from demo_agent.protocol import ProtocolError, event, parse_request, response_error, response_ok
 
 EventListener = Callable[[dict[str, Any]], Awaitable[None]]
 
 
 class AgentService:
-    """Application boundary shared by stdio, WebSocket, tests and the desktop broker."""
-
     def __init__(self, database_path: str | Path, *, step_delay: float = 0.01, approval_timeout: float = 120.0) -> None:
+        load_environment()
         self.repository = SqliteRepository(database_path)
         self.repository.recover_interrupted()
         self._listeners: set[EventListener] = set()
-        self.run_manager = RunManager(
-            self.repository, MockAgent(step_delay), self._broadcast, approval_timeout=approval_timeout
-        )
+        self.run_manager = RunManager(self.repository, MockAgent(step_delay), self._broadcast, approval_timeout=approval_timeout)
         self.started_at = utc_now()
 
     def add_listener(self, listener: EventListener) -> Callable[[], None]:
@@ -57,6 +55,11 @@ class AgentService:
         handlers: dict[str, Callable[[dict[str, Any]], Awaitable[Any]]] = {
             "runtime.status": self._handle_runtime_status,
             "runtime.restart": self._handle_runtime_restart,
+            "project.list": self._handle_project_list,
+            "project.get": self._handle_project_get,
+            "project.create": self._handle_project_create,
+            "project.rename": self._handle_project_rename,
+            "project.delete": self._handle_project_delete,
             "session.list": self._handle_session_list,
             "session.create": self._handle_session_create,
             "session.get": self._handle_session_get,
@@ -84,7 +87,7 @@ class AgentService:
         return value.strip()
 
     async def _runtime_status(self) -> dict[str, Any]:
-        settings = self.repository.settings_get()
+        settings = resolve_settings(self.repository.settings_get())
         return {
             "connected": True,
             "mode": "mock" if settings["provider"] == "mock" else "adapter_pending",
@@ -98,16 +101,53 @@ class AgentService:
         return await self._runtime_status()
 
     async def _handle_runtime_restart(self, params: dict[str, Any]) -> dict[str, Any]:
-        # Process restart is owned by the Rust broker; Python confirms it is ready to be restarted.
         return {"restart_required": True, "status": await self._runtime_status()}
+
+    async def _handle_project_list(self, params: dict[str, Any]) -> dict[str, Any]:
+        return {"projects": self.repository.list_projects()}
+
+    async def _handle_project_get(self, params: dict[str, Any]) -> dict[str, Any]:
+        project = self.repository.get_project(self._required_string(params, "project_id"))
+        sessions = [s for s in self.repository.list_sessions() if s.get("project_id") == project["id"]]
+        return {**project, "sessions": sessions}
+
+    async def _handle_project_create(self, params: dict[str, Any]) -> dict[str, Any]:
+        name = str(params.get("name") or "新项目").strip()[:200] or "新项目"
+        now = utc_now()
+        project = Project(str(params.get("project_id") or new_id("project")), name, now, now)
+        result = self.repository.create_project(project)
+        await self._broadcast(event("project.updated", {"project": result}))
+        return result
+
+    async def _handle_project_rename(self, params: dict[str, Any]) -> dict[str, Any]:
+        project_id = self._required_string(params, "project_id")
+        name = self._required_string(params, "name")[:200]
+        result = self.repository.rename_project(project_id, name)
+        await self._broadcast(event("project.updated", {"project": result}))
+        return result
+
+    async def _handle_project_delete(self, params: dict[str, Any]) -> dict[str, Any]:
+        project_id = self._required_string(params, "project_id")
+        if project_id == DEFAULT_PROJECT_ID:
+            raise ProtocolError("invalid_state", "the default project cannot be deleted")
+        sessions = [s for s in self.repository.list_sessions() if s.get("project_id") == project_id]
+        if any(self.run_manager.active_run(s["id"]) for s in sessions):
+            raise ProtocolError("run_conflict", "cancel active runs before deleting the project")
+        self.repository.delete_project(project_id)
+        await self._broadcast(event("project.updated", {"deleted": True, "project_id": project_id}))
+        return {"project_id": project_id, "deleted": True}
 
     async def _handle_session_list(self, params: dict[str, Any]) -> dict[str, Any]:
         return {"sessions": self.repository.list_sessions()}
 
     async def _handle_session_create(self, params: dict[str, Any]) -> dict[str, Any]:
         title = str(params.get("title") or "新对话").strip()[:200] or "新对话"
+        project_id = params.get("project_id") or DEFAULT_PROJECT_ID
+        if not isinstance(project_id, str):
+            raise ProtocolError("invalid_params", "project_id must be a string")
+        self.repository.get_project(project_id)
         now = utc_now()
-        session = Session(str(params.get("session_id") or new_id("session")), title, now, now)
+        session = Session(str(params.get("session_id") or new_id("session")), title, now, now, project_id)
         result = self.repository.create_session(session)
         await self._broadcast(event("session.updated", {"session": result}, session_id=session.id))
         return result
@@ -166,14 +206,14 @@ class AgentService:
         return await self.run_manager.resolve_approval(self._required_string(params, "request_id"), approved)
 
     async def _handle_settings_get(self, params: dict[str, Any]) -> dict[str, Any]:
-        return {**self.repository.settings_get(), "api_key_configured": False}
+        return {**resolve_settings(self.repository.settings_get()), "api_key_configured": api_key_configured()}
 
     async def _handle_settings_update(self, params: dict[str, Any]) -> dict[str, Any]:
-        # api_key is intentionally not persisted or echoed. The Rust broker owns the system keychain.
         public_values = {key: params[key] for key in ("provider", "base_url", "model") if key in params}
         if any(not isinstance(value, str) for value in public_values.values()):
             raise ProtocolError("invalid_params", "model settings must be strings")
-        return {**self.repository.settings_update(public_values), "api_key_configured": bool(params.get("api_key_configured", False))}
+        stored = self.repository.settings_update(public_values)
+        return {**resolve_settings(stored), "api_key_configured": api_key_configured()}
 
     async def close(self) -> None:
         await self.run_manager.close()

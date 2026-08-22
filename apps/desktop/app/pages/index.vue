@@ -24,7 +24,7 @@ async function submit(objective: string, attachments: import('~/types/agent').At
     <section class="welcome">
       <span class="welcome-mark"><NIcon :component="Robot" :size="27" /></span>
       <h1>今天要完成什么？</h1>
-      <p>描述目标，Demo Agent 会规划任务、选择推理强度并委派给子 Agent。</p>
+      <p>描述目标，Demo Agent 会规划任务、选择推理强度并委派给子 Agent。新对话默认创建在「默认项目」中，可在左侧新建或切换项目。</p>
     </section>
     <div class="home-composer">
       <MessageComposer

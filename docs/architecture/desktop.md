@@ -53,8 +53,9 @@ flowchart TB
 
 | 数据 | 唯一事实源 | 允许缓存 | 禁止位置 |
 | --- | --- | --- | --- |
+| 项目 | Python SQLite | Pinia 内存快照 | localStorage |
 | 会话、消息、运行、任务、附件、确认 | Python SQLite | Pinia 内存快照 | localStorage |
-| Provider、Base URL、模型 | Python SQLite | 设置页短期状态 | 日志中的敏感上下文 |
+| Provider、Base URL、模型 | Python SQLite（`.env` 仅作开发初始默认） | 设置页短期状态 | 日志中的敏感上下文 |
 | API Key | 系统钥匙串 | 设置输入框提交前的瞬时值 | Python SQLite、Pinia、localStorage、事件、日志 |
 | 主题、侧栏状态、迁移标记 | localStorage | Pinia UI Store | Agent 事件 |
 | runtime 连接状态 | Rust broker 真实状态 | Pinia | 前端乐观常量 |
@@ -67,10 +68,10 @@ SQLite 启用 foreign keys、WAL、busy timeout 和版本化迁移。事件只�
 
 ```text
 demo_agent/
-  domain/          # 会话、运行、任务、消息等实体和值对象
-  application/     # session service、run manager、approval service
+  domain/          # 项目、会话、运行、任务、消息等实体和值对象
+  application/     # project/session service、run manager、配置解析
   ports/           # ModelPort、McpPort、KvCachePort、DocumentParserPort
-  adapters/        # SQLite、确定性 mock、未来生产适配器
+  adapters/        # SQLite schema/仓储、确定性 mock、未来生产适配器
   transport/       # envelope 校验、dispatcher、stdio、WebSocket
 ```
 
@@ -185,7 +186,7 @@ Rust spawn sidecar → Python 执行数据库迁移并打开 WAL → transport �
 
 ## 跨平台分发
 
-Python 环境和依赖统一由 uv 管理。发布时使用自包含 Python runtime 随 Tauri sidecar 分发，不依赖系统 Python。CI 覆盖 Windows、macOS、Linux，并对二进制和更新清单签名。
+Python 环境和依赖统一由 uv 管理。发布时执行 `bash scripts/build-sidecar.sh`，用 python-build-standalone + uv 生成自包含 Python runtime 到 `apps/desktop/src-tauri/resources/sidecar/`，随 Tauri `bundle.resources` 分发，不依赖系统 Python；Rust broker 优先使用该运行时，缺失时回退 `uv run` 开发模式。CI 覆盖 Windows、macOS、Linux，并对二进制和更新清单签名。
 
 ## 深入阅读
 

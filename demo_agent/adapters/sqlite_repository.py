@@ -7,14 +7,24 @@ from contextlib import contextmanager
 from pathlib import Path
 from typing import Any
 
-from demo_agent.domain.models import AgentTask, Message, Run, RunStatus, Session, TaskStatus, utc_now
+from demo_agent.adapters.sqlite_schema import MIGRATION_V1_TO_V2, SCHEMA_V2
+from demo_agent.domain.models import (
+    DEFAULT_PROJECT_ID,
+    DEFAULT_PROJECT_NAME,
+    AgentTask,
+    Message,
+    Project,
+    Run,
+    RunStatus,
+    Session,
+    TaskStatus,
+    utc_now,
+)
 from demo_agent.protocol import ProtocolError
 
 
 class SqliteRepository:
-    """SQLite data source. A connection is opened per operation for thread safety."""
-
-    SCHEMA_VERSION = 1
+    SCHEMA_VERSION = 2
 
     def __init__(self, path: str | Path) -> None:
         self.path = Path(path)
@@ -48,53 +58,66 @@ class SqliteRepository:
             if version > self.SCHEMA_VERSION:
                 raise RuntimeError(f"database version {version} is newer than supported")
             if version == 0:
-                db.executescript(
-                    """
-                    CREATE TABLE sessions (
-                        id TEXT PRIMARY KEY, title TEXT NOT NULL,
-                        created_at TEXT NOT NULL, updated_at TEXT NOT NULL
-                    );
-                    CREATE TABLE messages (
-                        id TEXT PRIMARY KEY, session_id TEXT NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
-                        run_id TEXT, role TEXT NOT NULL, content TEXT NOT NULL,
-                        status TEXT NOT NULL, created_at TEXT NOT NULL
-                    );
-                    CREATE TABLE runs (
-                        id TEXT PRIMARY KEY, session_id TEXT NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
-                        objective TEXT NOT NULL, status TEXT NOT NULL, error TEXT,
-                        created_at TEXT NOT NULL, updated_at TEXT NOT NULL
-                    );
-                    CREATE TABLE tasks (
-                        id TEXT PRIMARY KEY, run_id TEXT NOT NULL REFERENCES runs(id) ON DELETE CASCADE,
-                        session_id TEXT NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
-                        parent_id TEXT, description TEXT NOT NULL, effort TEXT NOT NULL,
-                        status TEXT NOT NULL, output TEXT, error TEXT, position INTEGER NOT NULL
-                    );
-                    CREATE TABLE attachments (
-                        id TEXT PRIMARY KEY, message_id TEXT NOT NULL REFERENCES messages(id) ON DELETE CASCADE,
-                        path TEXT NOT NULL, name TEXT NOT NULL, size INTEGER, mime_type TEXT
-                    );
-                    CREATE TABLE settings (key TEXT PRIMARY KEY, value TEXT NOT NULL);
-                    CREATE TABLE legacy_imports (import_id TEXT PRIMARY KEY, imported_at TEXT NOT NULL, summary TEXT NOT NULL);
-                    CREATE INDEX idx_messages_session ON messages(session_id, created_at);
-                    CREATE INDEX idx_runs_session ON runs(session_id, created_at);
-                    CREATE INDEX idx_tasks_run ON tasks(run_id, position);
-                    PRAGMA user_version = 1;
-                    """
-                )
+                db.executescript(SCHEMA_V2)
+                self._seed_default_project(db)
+            elif version == 1:
+                db.executescript(MIGRATION_V1_TO_V2)
+                self._seed_default_project(db)
+                db.execute("UPDATE sessions SET project_id=? WHERE project_id IS NULL", (DEFAULT_PROJECT_ID,))
+
+    @staticmethod
+    def _seed_default_project(db: sqlite3.Connection) -> None:
+        db.execute(
+            "INSERT INTO projects(id,name,created_at,updated_at) VALUES(?,?,?,?)",
+            (DEFAULT_PROJECT_ID, DEFAULT_PROJECT_NAME, utc_now(), utc_now()),
+        )
+
+    def create_project(self, project: Project) -> dict[str, Any]:
+        with self.transaction() as db:
+            db.execute(
+                "INSERT INTO projects(id,name,created_at,updated_at) VALUES(?,?,?,?)",
+                (project.id, project.name, project.created_at, project.updated_at),
+            )
+        return project.to_dict()
+
+    def list_projects(self) -> list[dict[str, Any]]:
+        with self._connect() as db:
+            rows = db.execute("SELECT * FROM projects ORDER BY created_at").fetchall()
+        return [dict(row) for row in rows]
+
+    def get_project(self, project_id: str) -> dict[str, Any]:
+        with self._connect() as db:
+            row = db.execute("SELECT * FROM projects WHERE id=?", (project_id,)).fetchone()
+            if row is None:
+                raise ProtocolError("not_found", "project not found")
+        return dict(row)
+
+    def rename_project(self, project_id: str, name: str) -> dict[str, Any]:
+        now = utc_now()
+        with self.transaction() as db:
+            changed = db.execute("UPDATE projects SET name=?,updated_at=? WHERE id=?", (name, now, project_id)).rowcount
+            if not changed:
+                raise ProtocolError("not_found", "project not found")
+        return self.get_project(project_id)
+
+    def delete_project(self, project_id: str) -> None:
+        with self.transaction() as db:
+            changed = db.execute("DELETE FROM projects WHERE id=?", (project_id,)).rowcount
+            if not changed:
+                raise ProtocolError("not_found", "project not found")
 
     def create_session(self, session: Session) -> dict[str, Any]:
         with self.transaction() as db:
             db.execute(
-                "INSERT INTO sessions(id,title,created_at,updated_at) VALUES(?,?,?,?)",
-                (session.id, session.title, session.created_at, session.updated_at),
+                "INSERT INTO sessions(id,title,project_id,created_at,updated_at) VALUES(?,?,?,?,?)",
+                (session.id, session.title, session.project_id, session.created_at, session.updated_at),
             )
         return session.to_dict()
 
     def list_sessions(self) -> list[dict[str, Any]]:
         with self._connect() as db:
             rows = db.execute(
-                """SELECT s.*, (SELECT status FROM runs r WHERE r.session_id=s.id ORDER BY created_at DESC LIMIT 1) run_status
+                """SELECT s.*, (SELECT status FROM runs r WHERE r.session_id=s.id ORDER BY created_at DESC LIMIT 1) status
                    FROM sessions s ORDER BY updated_at DESC"""
             ).fetchall()
         return [dict(row) for row in rows]
@@ -110,7 +133,8 @@ class SqliteRepository:
             runs = [dict(row) for row in db.execute("SELECT * FROM runs WHERE session_id=? ORDER BY created_at", (session_id,))]
             for run in runs:
                 run["tasks"] = [dict(row) for row in db.execute("SELECT * FROM tasks WHERE run_id=? ORDER BY position", (run["id"],))]
-        return {**dict(session), "messages": messages, "runs": runs}
+        status = runs[-1]["status"] if runs else "idle"
+        return {**dict(session), "status": status, "messages": messages, "runs": runs}
 
     def rename_session(self, session_id: str, title: str) -> dict[str, Any]:
         now = utc_now()
@@ -136,12 +160,27 @@ class SqliteRepository:
         with self.transaction() as db:
             db.execute(
                 "INSERT INTO messages(id,session_id,run_id,role,content,status,created_at) VALUES(?,?,?,?,?,?,?)",
-                (message.id, message.session_id, message.run_id, message.role, message.content, message.status, message.created_at),
+                (
+                    message.id,
+                    message.session_id,
+                    message.run_id,
+                    message.role,
+                    message.content,
+                    message.status,
+                    message.created_at,
+                ),
             )
             for attachment in attachments or []:
                 db.execute(
                     "INSERT INTO attachments(id,message_id,path,name,size,mime_type) VALUES(?,?,?,?,?,?)",
-                    (attachment["id"], message.id, attachment["path"], attachment["name"], attachment.get("size"), attachment.get("mime_type")),
+                    (
+                        attachment["id"],
+                        message.id,
+                        attachment["path"],
+                        attachment["name"],
+                        attachment.get("size"),
+                        attachment.get("mime_type"),
+                    ),
                 )
             db.execute("UPDATE sessions SET updated_at=? WHERE id=?", (utc_now(), message.session_id))
         value = message.to_dict()
@@ -188,27 +227,45 @@ class SqliteRepository:
         with self.transaction() as db:
             db.executemany(
                 "INSERT INTO tasks(id,run_id,session_id,parent_id,description,effort,status,output,error,position) VALUES(?,?,?,?,?,?,?,?,?,?)",
-                [(t.id,t.run_id,t.session_id,t.parent_id,t.description,t.effort,str(t.status),t.output,t.error,t.position) for t in tasks],
+                [
+                    (
+                        t.id,
+                        t.run_id,
+                        t.session_id,
+                        t.parent_id,
+                        t.description,
+                        t.effort,
+                        str(t.status),
+                        t.output,
+                        t.error,
+                        t.position,
+                    )
+                    for t in tasks
+                ],
             )
         return [task.to_dict() for task in tasks]
 
     def update_task(self, task_id: str, status: TaskStatus, *, output: str | None = None, error: str | None = None) -> None:
         with self.transaction() as db:
-            db.execute("UPDATE tasks SET status=?,output=COALESCE(?,output),error=? WHERE id=?", (str(status), output, error, task_id))
+            db.execute(
+                "UPDATE tasks SET status=?,output=COALESCE(?,output),error=? WHERE id=?",
+                (str(status), output, error, task_id),
+            )
 
     def settings_get(self) -> dict[str, Any]:
-        defaults: dict[str, Any] = {"provider": "mock", "base_url": "", "model": "mock-agent-v1"}
         with self._connect() as db:
-            for row in db.execute("SELECT key,value FROM settings"):
-                defaults[row["key"]] = json.loads(row["value"])
-        return defaults
+            values = {row["key"]: json.loads(row["value"]) for row in db.execute("SELECT key,value FROM settings")}
+        return values
 
     def settings_update(self, values: dict[str, Any]) -> dict[str, Any]:
         allowed = {"provider", "base_url", "model"}
         with self.transaction() as db:
             for key, value in values.items():
                 if key in allowed:
-                    db.execute("INSERT INTO settings(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value", (key, json.dumps(value)))
+                    db.execute(
+                        "INSERT INTO settings(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value",
+                        (key, json.dumps(value)),
+                    )
         return self.settings_get()
 
     def import_legacy(self, import_id: str, sessions: list[dict[str, Any]]) -> dict[str, int]:
@@ -227,13 +284,22 @@ class SqliteRepository:
                     if db.execute("SELECT 1 FROM sessions WHERE id=?", (session_id,)).fetchone():
                         skipped += 1
                         continue
-                    db.execute("INSERT INTO sessions VALUES(?,?,?,?)", (session_id, title, created, created))
+                    db.execute(
+                        "INSERT INTO sessions(id,title,project_id,created_at,updated_at) VALUES(?,?,?,?,?)",
+                        (session_id, title, DEFAULT_PROJECT_ID, created, created),
+                    )
                     for raw_message in raw.get("messages", []):
                         db.execute(
                             "INSERT INTO messages(id,session_id,run_id,role,content,status,created_at) VALUES(?,?,?,?,?,?,?)",
-                            (str(raw_message.get("id") or f"legacy_{session_id}_{imported}"), session_id, None,
-                             str(raw_message.get("role") or "assistant"), str(raw_message.get("content") or ""),
-                             "completed", str(raw_message.get("createdAt") or created)),
+                            (
+                                str(raw_message.get("id") or f"legacy_{session_id}_{imported}"),
+                                session_id,
+                                None,
+                                str(raw_message.get("role") or "assistant"),
+                                str(raw_message.get("content") or ""),
+                                "completed",
+                                str(raw_message.get("createdAt") or created),
+                            ),
                         )
                     imported += 1
                     db.execute(f"RELEASE SAVEPOINT {savepoint}")
@@ -252,7 +318,6 @@ class SqliteRepository:
         return {"path": str(self.path), "schema_version": version, "session_count": sessions}
 
     def recover_interrupted(self) -> int:
-        """Mark work left active by an unclean process exit as failed."""
         with self.transaction() as db:
             rows = db.execute("SELECT id FROM runs WHERE status IN ('queued','running','waiting')").fetchall()
             run_ids = [row["id"] for row in rows]

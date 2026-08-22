@@ -49,9 +49,17 @@ export interface RunRecord {
   updatedAt: string
 }
 
+export interface ProjectRecord {
+  id: string
+  name: string
+  createdAt: string
+  updatedAt: string
+}
+
 export interface SessionRecord {
   id: string
   title: string
+  projectId: string | null
   createdAt: string
   updatedAt: string
   status: SessionStatus

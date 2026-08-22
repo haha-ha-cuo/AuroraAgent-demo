@@ -7,6 +7,7 @@ from pathlib import Path
 import uvicorn
 
 from demo_agent.application.service import AgentService
+from demo_agent.application.settings import load_environment
 from demo_agent.transport.stdio import run_stdio
 from demo_agent.transport.websocket import create_app
 
@@ -19,6 +20,7 @@ def _default_database_path() -> Path:
 
 
 def main() -> None:
+    load_environment()
     parser = argparse.ArgumentParser(description="Aurora Agent local runtime")
     parser.add_argument("--stdio", action="store_true", help="serve NDJSON on stdin/stdout")
     parser.add_argument("--host", default="127.0.0.1")

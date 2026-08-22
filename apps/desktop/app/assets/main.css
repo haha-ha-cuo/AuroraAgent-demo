@@ -1,7 +1,7 @@
 :root {
   color-scheme: light dark;
   --app-bg: #ffffff;
-  --shell-bg: #e9ebee;
+  --shell-bg: var(--app-bg);
   --sidebar-bg: #f4f5f6;
   --sidebar-glass: rgb(248 249 250 / 78%);
   --content-glass: rgb(255 255 255 / 92%);
@@ -19,7 +19,7 @@
 
 [data-theme="dark"] {
     --app-bg: #161616;
-    --shell-bg: #101112;
+    --shell-bg: var(--app-bg);
     --sidebar-bg: #202020;
     --sidebar-glass: rgb(35 36 38 / 76%);
     --content-glass: rgb(24 24 25 / 92%);

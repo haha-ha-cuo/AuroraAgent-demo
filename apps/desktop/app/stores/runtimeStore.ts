@@ -3,6 +3,7 @@ import type { ApprovalRequest, AttachmentRef, ModelSettings, RuntimeEvent, Runti
 import { normalizeMessage, normalizeRun, normalizeRuntime, normalizeSettings, normalizeTask } from '~/utils/normalizers'
 import { connectRuntime, onRuntimeEvent, restartRuntimeBroker, runtimeRequest } from '~/utils/runtimeClient'
 import { useSessionStore } from '~/stores/sessionStore'
+import { useProjectStore } from '~/stores/projectStore'
 
 let initialized: Promise<void> | null = null
 let unsubscribe: (() => void) | null = null
@@ -13,7 +14,7 @@ export const useRuntimeStore = defineStore('runtime', {
   state: () => ({
     connectionStatus: 'disconnected' as RuntimeInfo['status'],
     info: { status: 'disconnected', mode: '', version: '', databasePath: '', activeRuns: 0 } as RuntimeInfo,
-    settings: { provider: 'mock', baseUrl: '', model: 'deterministic-mock', hasApiKey: false, mockMode: true } as ModelSettings,
+    settings: { provider: 'mock', baseUrl: '', model: 'mock-agent-v1', hasApiKey: false, mockMode: true } as ModelSettings,
     approvals: [] as ApprovalRequest[],
     lastError: '',
   }),
@@ -29,7 +30,7 @@ export const useRuntimeStore = defineStore('runtime', {
           await connectRuntime()
           if (!unsubscribe) unsubscribe = onRuntimeEvent((event) => this.handleEvent(event))
           await this.refreshStatus()
-          await Promise.all([useSessionStore().loadAll(), this.loadSettings()])
+          await Promise.all([useSessionStore().loadAll(), useProjectStore().loadAll(), this.loadSettings()])
           await useSessionStore().importLegacy()
           this.connectionStatus = 'connected'
         } catch (error) {
@@ -62,7 +63,7 @@ export const useRuntimeStore = defineStore('runtime', {
     async saveSettings(patch: Partial<ModelSettings> & { apiKey?: string }) {
       const result = await runtimeRequest<any>('settings.update', {
         provider: patch.provider, base_url: patch.baseUrl, model: patch.model,
-        mock_mode: patch.mockMode, api_key: patch.apiKey || undefined,
+        api_key: patch.apiKey || undefined,
       })
       this.settings = normalizeSettings(result?.settings ?? result)
     },
@@ -98,6 +99,11 @@ export const useRuntimeStore = defineStore('runtime', {
       const taskId = event.task_id ?? String(payload.task_id ?? payload.id ?? '')
       if (event.type === 'runtime.ready') { this.connectionStatus = 'connected'; await this.refreshStatus().catch(() => {}) }
       if (event.type === 'runtime.disconnected') { this.connectionStatus = 'disconnected'; this.lastError = String(payload.message ?? '运行时已断开') }
+      if (event.type === 'project.updated') {
+        const projects = useProjectStore()
+        if (payload.deleted) projects.remove(String(payload.project_id ?? payload.id ?? ''))
+        else if (payload.project) projects.upsert(payload.project)
+      }
       if (!sessionId) return
       let session = sessions.sessions.find((item) => item.id === sessionId)
       if (!session) { await sessions.load(sessionId).catch(() => {}); session = sessions.sessions.find((item) => item.id === sessionId) }
