@@ -1,0 +1,29 @@
+{
+  "name": "demo-docs",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "typecheck": "vue-tsc --noEmit"
+  },
+  "dependencies": {
+    "highlight.js": "^11.11.1",
+    "markdown-it": "^14.1.0",
+    "markdown-it-anchor": "^9.2.0",
+    "markdown-it-attrs": "^5.0.1",
+    "mermaid": "^11.17.0",
+    "naive-ui": "^2.45.2",
+    "vue": "^3.5.41",
+    "vue-router": "^4.6.4"
+  },
+  "devDependencies": {
+    "@types/markdown-it": "^14.1.2",
+    "@vitejs/plugin-vue": "^6.0.8",
+    "typescript": "^5.9.3",
+    "vite": "^7.0.0",
+    "vue-tsc": "^3.3.11"
+  }
+}

@@ -10,8 +10,9 @@ __pycache__/
 # 密钥与本地配置
 .env
 
-# MkDocs 构建产物
+# 文档站构建产物
 site/
+apps/docs/dist/
 
 # 前端 / Tauri
 node_modules/

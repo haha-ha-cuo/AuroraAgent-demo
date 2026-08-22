@@ -4,9 +4,9 @@
 
 ## 阶段一：文档站
 
-- [x] 搭建 MkDocs Material 文档站
+- [x] 搭建文档站（Vite + Vue 3 + naive-ui）
 - [x] 固化项目定位、技术栈与参考架构
-- [ ] 确定 Git 远端并启用文档自动部署（可选）
+- [x] 确定 Git 远端并启用文档自动部署（GitHub Actions → GitHub Pages）
 
 ## 阶段二：Agent 核心
 

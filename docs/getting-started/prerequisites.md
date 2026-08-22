@@ -1,12 +1,14 @@
 # 环境准备
 
-本项目的 Python 环境统一使用 [uv](https://docs.astral.sh/uv/) 管理。以下是第一阶段（文档站）所需的最小环境。
+本项目的 Python 环境统一使用 [uv](https://docs.astral.sh/uv/) 管理。以下是最小开发环境（文档站与 Python 运行时）。
 
 ## 必备工具
 
 | 工具 | 版本要求 | 用途 |
 | --- | --- | --- |
 | [uv](https://docs.astral.sh/uv/) | 最新稳定版 | Python 环境与依赖管理 |
+| [Node.js](https://nodejs.org/) | LTS | 文档站与桌面壳前端构建 |
+| [pnpm](https://pnpm.io/) | 最新稳定版 | 前端依赖管理 |
 | [Git](https://git-scm.com/) | 2.x | 版本管理 |
 
 ### 安装 uv
@@ -33,8 +35,6 @@ uv --version
 
 仅开发/运行 Python 运行时无需以下工具；构建 `apps/desktop/` 桌面壳（Tauri + Nuxt）时需要：
 
-- [Node.js](https://nodejs.org/)（前端构建，建议 LTS）
-- [pnpm](https://pnpm.io/)（前端依赖管理）
 - [Rust](https://rustup.rs/)（Tauri 核心；macOS 另需 Xcode Command Line Tools，Linux 需 webkit2gtk 等）
 
 ## 下一步

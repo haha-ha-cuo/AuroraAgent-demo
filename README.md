@@ -65,14 +65,13 @@ uv run python -m demo_agent.experiment
 
 ## 文档
 
-完整文档见 [docs/](docs/index.md)，或本地启动：
+完整文档见 [docs/](docs/index.md)，站点源码在 [`apps/docs/`](apps/docs/)（Vite + Vue 3 + naive-ui），并已通过 GitHub Actions 自动发布到 <https://haha-ha-cuo.github.io/AuroraAgent-demo/>。本地预览：
 
 ```bash
-uv sync --group docs
-uv run mkdocs serve
+cd apps/docs
+pnpm install
+pnpm dev            # http://127.0.0.1:5173
 ```
-
-浏览器打开 <http://127.0.0.1:8000>。
 
 ## 开发约定
 

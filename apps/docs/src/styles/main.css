@@ -1,0 +1,521 @@
+:root {
+  --bg: #ffffff;
+  --bg-sider: #f7f8fa;
+  --text: #1f2329;
+  --text-muted: #646a73;
+  --border: #e5e6eb;
+  --primary: #4c6fff;
+  --code-bg: #f6f8fa;
+  --inline-code-bg: rgba(0, 0, 0, 0.06);
+  --blockquote-bg: #f3f5f9;
+  --blockquote-border: #4c6fff;
+  --table-head-bg: #f7f8fa;
+  --table-border: #e5e6eb;
+  --toc-active: #4c6fff;
+
+  --hl-comment: #6a737d;
+  --hl-keyword: #d73a49;
+  --hl-string: #032f62;
+  --hl-number: #005cc5;
+  --hl-title: #6f42c1;
+  --hl-builtin: #e36209;
+  --hl-type: #005cc5;
+  --hl-meta: #22863a;
+}
+
+html.dark {
+  --bg: #101014;
+  --bg-sider: #141419;
+  --text: rgba(255, 255, 255, 0.9);
+  --text-muted: rgba(255, 255, 255, 0.52);
+  --border: rgba(255, 255, 255, 0.1);
+  --primary: #6e88ff;
+  --code-bg: #1b1b20;
+  --inline-code-bg: rgba(255, 255, 255, 0.12);
+  --blockquote-bg: rgba(110, 136, 255, 0.1);
+  --blockquote-border: #6e88ff;
+  --table-head-bg: #1a1a1f;
+  --table-border: rgba(255, 255, 255, 0.1);
+  --toc-active: #6e88ff;
+
+  --hl-comment: #8b949e;
+  --hl-keyword: #ff7b72;
+  --hl-string: #a5d6ff;
+  --hl-number: #79c0ff;
+  --hl-title: #d2a8ff;
+  --hl-builtin: #ffa657;
+  --hl-type: #79c0ff;
+  --hl-meta: #7ee787;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#app {
+  margin: 0;
+  padding: 0;
+  min-height: 100%;
+}
+
+body {
+  font-family:
+    -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue',
+    'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
+  color: var(--text);
+  background: var(--bg);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+a {
+  color: var(--primary);
+  text-decoration: none;
+}
+
+/* ---------- 应用外壳 ---------- */
+.app-header {
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 56px;
+  padding: 0 16px;
+  background: var(--bg);
+  border-bottom: 1px solid var(--border);
+  backdrop-filter: saturate(180%) blur(8px);
+}
+
+.header-left,
+.header-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text);
+  font-weight: 600;
+  font-size: 15px;
+}
+
+.brand-mark {
+  color: var(--primary);
+  font-size: 16px;
+}
+
+.brand-sub {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-muted);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 1px 6px;
+}
+
+.header-btn {
+  font-size: 18px;
+}
+
+.app-body {
+  display: flex;
+  align-items: stretch;
+}
+
+.app-sider {
+  flex: 0 0 260px;
+  width: 260px;
+  position: sticky;
+  top: 56px;
+  height: calc(100vh - 56px);
+  overflow-y: auto;
+  background: var(--bg-sider);
+  border-right: 1px solid var(--border);
+  padding: 14px 8px 40px;
+}
+
+.app-content {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+/* ---------- 文档页 ---------- */
+.doc-page {
+  padding: 32px 40px 64px;
+}
+
+.doc-grid {
+  display: flex;
+  gap: 48px;
+  max-width: 980px;
+  margin: 0 auto;
+}
+
+.markdown-body {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: 15px;
+  line-height: 1.75;
+  color: var(--text);
+}
+
+.doc-toc {
+  flex: 0 0 220px;
+  width: 220px;
+  position: sticky;
+  top: 80px;
+  align-self: flex-start;
+  max-height: calc(100vh - 110px);
+  overflow-y: auto;
+}
+
+.toc-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-muted);
+  margin-bottom: 8px;
+}
+
+.toc-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.toc-item {
+  display: block;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--text-muted);
+  padding: 4px 8px;
+  border-left: 2px solid transparent;
+  border-radius: 0 4px 4px 0;
+  transition:
+    color 0.15s,
+    background 0.15s;
+}
+
+.toc-item:hover {
+  color: var(--text);
+}
+
+.toc-item.active {
+  color: var(--toc-active);
+  border-left-color: var(--toc-active);
+  background: var(--inline-code-bg);
+}
+
+.toc-l3 {
+  padding-left: 22px;
+  font-size: 12.5px;
+}
+
+/* ---------- Markdown 正文 ---------- */
+.markdown-body h1,
+.markdown-body h2,
+.markdown-body h3,
+.markdown-body h4 {
+  scroll-margin-top: 72px;
+  line-height: 1.3;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.markdown-body h1 {
+  font-size: 28px;
+  margin: 0 0 20px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--border);
+}
+
+.markdown-body h2 {
+  font-size: 22px;
+  margin: 40px 0 14px;
+}
+
+.markdown-body h3 {
+  font-size: 17px;
+  margin: 28px 0 10px;
+}
+
+.markdown-body h4 {
+  font-size: 15px;
+  margin: 22px 0 8px;
+}
+
+.markdown-body p {
+  margin: 0 0 14px;
+}
+
+.markdown-body ul,
+.markdown-body ol {
+  margin: 0 0 14px;
+  padding-left: 24px;
+}
+
+.markdown-body li {
+  margin: 4px 0;
+}
+
+.markdown-body li > ul,
+.markdown-body li > ol {
+  margin-bottom: 0;
+}
+
+.markdown-body strong {
+  font-weight: 600;
+}
+
+.markdown-body hr {
+  border: none;
+  border-top: 1px solid var(--border);
+  margin: 32px 0;
+}
+
+.markdown-body blockquote {
+  margin: 16px 0;
+  padding: 12px 16px;
+  border-left: 3px solid var(--blockquote-border);
+  background: var(--blockquote-bg);
+  border-radius: 0 6px 6px 0;
+  color: var(--text);
+}
+
+.markdown-body blockquote p {
+  margin: 0;
+}
+
+.markdown-body blockquote p + p {
+  margin-top: 8px;
+}
+
+.markdown-body code {
+  font-family: 'SF Mono', 'JetBrains Mono', 'Fira Code', Menlo, Consolas,
+    'Liberation Mono', monospace;
+}
+
+.markdown-body :not(pre) > code {
+  background: var(--inline-code-bg);
+  border-radius: 4px;
+  padding: 2px 6px;
+  font-size: 0.88em;
+  color: var(--text);
+}
+
+.markdown-body pre {
+  margin: 16px 0;
+  overflow-x: auto;
+  border-radius: 8px;
+}
+
+.markdown-body table {
+  border-collapse: collapse;
+  width: 100%;
+  margin: 16px 0;
+  font-size: 14px;
+  display: block;
+  overflow-x: auto;
+}
+
+.markdown-body table th,
+.markdown-body table td {
+  border: 1px solid var(--table-border);
+  padding: 8px 12px;
+  text-align: left;
+}
+
+.markdown-body table th {
+  background: var(--table-head-bg);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.markdown-body img {
+  max-width: 100%;
+}
+
+/* ---------- 代码块 ---------- */
+.code-block {
+  position: relative;
+  margin: 16px 0;
+}
+
+.code-block pre {
+  margin: 0;
+  background: var(--code-bg);
+  border: 1px solid var(--border);
+  padding: 16px 18px;
+  border-radius: 8px;
+}
+
+.code-block code.hljs {
+  background: transparent;
+  padding: 0;
+  font-size: 13.5px;
+  line-height: 1.6;
+}
+
+.code-copy {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 2;
+  font-size: 12px;
+  padding: 3px 8px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text-muted);
+  border-radius: 5px;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+
+.code-block:hover .code-copy,
+.code-copy:focus {
+  opacity: 1;
+}
+
+/* highlight.js token 颜色（跟随主题变量） */
+.hljs-comment,
+.hljs-quote {
+  color: var(--hl-comment);
+  font-style: italic;
+}
+
+.hljs-keyword,
+.hljs-selector-tag,
+.hljs-literal,
+.hljs-doctag,
+.hljs-template-tag {
+  color: var(--hl-keyword);
+}
+
+.hljs-string,
+.hljs-regexp,
+.hljs-addition {
+  color: var(--hl-string);
+}
+
+.hljs-number,
+.hljs-symbol,
+.hljs-bullet {
+  color: var(--hl-number);
+}
+
+.hljs-title,
+.hljs-section,
+.hljs-function .hljs-title {
+  color: var(--hl-title);
+}
+
+.hljs-built_in,
+.hljs-builtin-name,
+.hljs-attr,
+.hljs-attribute,
+.hljs-variable {
+  color: var(--hl-builtin);
+}
+
+.hljs-type,
+.hljs-class .hljs-title {
+  color: var(--hl-type);
+}
+
+.hljs-meta,
+.hljs-meta .hljs-keyword,
+.hljs-link {
+  color: var(--hl-meta);
+}
+
+.hljs-deletion {
+  color: var(--hl-keyword);
+}
+
+/* ---------- Mermaid ---------- */
+.mermaid-block {
+  margin: 20px 0;
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--code-bg);
+  overflow-x: auto;
+  text-align: center;
+}
+
+.mermaid-block svg {
+  max-width: 100%;
+  height: auto;
+}
+
+.mermaid-block.error {
+  text-align: left;
+}
+
+.mermaid-fallback {
+  margin: 0;
+  overflow-x: auto;
+}
+
+/* ---------- 页脚 / 上一篇下一篇 ---------- */
+.doc-footer {
+  max-width: 980px;
+  margin: 40px auto 0;
+  border-top: 1px solid var(--border);
+  padding-top: 20px;
+}
+
+.doc-meta {
+  margin-bottom: 16px;
+}
+
+.edit-link {
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.edit-link:hover {
+  color: var(--primary);
+}
+
+.doc-nav {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+
+.not-found {
+  max-width: 720px;
+  margin: 80px auto;
+}
+
+/* ---------- 响应式 ---------- */
+@media (max-width: 900px) {
+  .app-sider {
+    display: none;
+  }
+
+  .doc-page {
+    padding: 20px 18px 48px;
+  }
+
+  .doc-toc {
+    display: none;
+  }
+
+  .markdown-body h1 {
+    font-size: 24px;
+  }
+
+  .code-copy {
+    opacity: 1;
+  }
+}

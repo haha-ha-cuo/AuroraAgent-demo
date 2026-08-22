@@ -1,0 +1,7 @@
+# pnpm 设置（pnpm 11+ 不再读 package.json 的 pnpm 字段）。
+# allowBuilds：依赖名 → 是否允许其运行安装脚本。
+allowBuilds:
+  esbuild: true
+minimumReleaseAgeExclude:
+  - '@vue/language-core@3.3.11'
+  - vue-tsc@3.3.11
