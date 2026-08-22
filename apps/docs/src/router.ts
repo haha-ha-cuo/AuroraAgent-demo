@@ -6,7 +6,7 @@ export const router = createRouter({
     {
       path: '/:pathMatch(.*)*',
       name: 'doc',
-      component: () => import('./components/DocPage.vue'),
+      component: () => import('./components/DocPage/DocPage.vue'),
     },
   ],
   scrollBehavior(to, _from, savedPosition) {

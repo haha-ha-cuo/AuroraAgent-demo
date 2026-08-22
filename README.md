@@ -1,81 +1,128 @@
-# Demo · CodeX-like AI Agent
+# Aurora Agent Demo
 
-形如 CodeX 的**全平台桌面 AI Agent 应用**：拿到一个项目后，Agent 将任务委派给子 Agent，由 Agent 自身决定委派质量（推理强度），并通过可对外扩展的**能力特化层**让用户特化 Agent 的能力。
+Aurora Agent Demo 是一套面向桌面的多 Agent 工作台。用户提交目标后，运行时会生成递归任务树，根据任务复杂度分配推理强度，并将执行过程、确认请求和最终报告实时同步到桌面端。
 
-> 当前进度：**阶段一（文档站）+ 阶段二（Agent 运行时）+ 阶段三（桌面壳：选型已定，脚手架待建）**。
+项目当前提供可完整演示的确定性 Mock 模式，无需配置模型密钥。
+
+## 核心能力
+
+- 连续对话与多会话后台并行
+- 同一会话单运行互斥、停止和失败重试
+- 递归委派树、任务状态和流式输出
+- 风险操作确认门
+- 本地文件引用与附件元数据
+- SQLite 会话、消息、运行和任务持久化
+- stdio 与 WebSocket 共用 Runtime Protocol v1
+- API Key 仅保存到系统钥匙串
+- 系统、浅色和深色三档主题
 
 ## 技术栈
 
-LangChain Core · LangGraph · MCP · 能力特化层 · 本地 API 管理 · uv · Tauri · Nuxt(Vue3+TS)
+- 桌面端：Tauri 2、Rust
+- 前端：Nuxt 4、Vue 3、TypeScript、Naive UI、Pinia
+- Agent：Python 3.13、LangGraph、FastAPI
+- 持久化：SQLite（WAL）
+- 包管理：uv、pnpm、Cargo
 
-## 桌面应用
+## 项目结构
 
-桌面壳选型为 **Tauri 2 + Nuxt（Vue 3 + TS，SPA）**，Python Agent 运行时以 sidecar 进程打包分发（python-build-standalone + uv），进程间走 **stdio（NDJSON 中继）**。架构见 [docs/architecture/desktop.md](docs/architecture/desktop.md) 与 [ADR-007](docs/architecture/decisions.md)。
+```text
+AuroraAgent-demo/
+├─ apps/desktop/                 # Nuxt + Tauri 桌面应用
+│  ├─ app/components/            # 每个组件使用独立同名目录
+│  ├─ app/pages/                 # Nuxt 页面路由
+│  ├─ app/stores/                # 后端数据缓存与 UI 状态
+│  └─ src-tauri/                 # Rust sidecar broker
+├─ apps/docs/                    # 文档站（组件同样使用独立目录）
+├─ demo_agent/
+│  ├─ domain/                    # 会话、运行、任务等领域模型
+│  ├─ application/               # 应用服务与运行调度
+│  ├─ ports/                     # Model、MCP、KV、文档解析端口
+│  ├─ adapters/                  # SQLite 与 Mock Agent 适配器
+│  └─ transport/                 # stdio / WebSocket 传输
+├─ docs/architecture/            # 协议、桌面架构与路由文档
+└─ tests/                        # Python runtime 测试
+```
 
-脚手架位于 [`apps/desktop/`](apps/desktop/)（当前为骨架）：
+## 环境要求
+
+- Python 3.13
+- [uv](https://docs.astral.sh/uv/)
+- Node.js 20 或更高版本
+- pnpm 11
+- Rust stable 与 Tauri 2 的系统依赖
+
+更完整的环境说明见 [前置要求](docs/getting-started/prerequisites.md)。
+
+## 启动桌面应用
 
 ```bash
-# 1) Python 运行时
+# 仓库根目录
 uv sync
 
-# 2) 前端 + 桌面壳（Rust 侧自动拉起 --stdio sidecar）
 cd apps/desktop
 pnpm install
 pnpm tauri dev
-
-# 也可单独跑前端（浏览器联调，直连 WS）
-pnpm dev                                            # http://127.0.0.1:3000
-uv run python -m demo_agent.server --port 8765      # 另一终端起 WS 服务
 ```
 
-> 事件协议见 `demo_agent/server.py` 顶部注释；开发态前端可直连 WS，打包态走 Tauri stdio 中继。
+Rust broker 会通过 stdio 自动启动 Python runtime。默认使用 Mock Provider，不需要 API Key。
 
-## 最小 demo
+## 浏览器联调
 
-一个可运行的纵向切片：LangGraph 委派树 + 推理强度 + 能力特化层 + 本地 API 管理。无密钥可跑 mock 模式：
+分别启动 Python WebSocket runtime 和 Nuxt：
 
 ```bash
-uv sync
-uv run python -m demo_agent "列出项目文件结构，并阅读 README.md 总结项目定位"
+# 终端一：仓库根目录
+uv run python -m demo_agent --port 8765
+
+# 终端二
+cd apps/desktop
+pnpm dev
 ```
 
-配置密钥走真实模型（任意 OpenAI 兼容端点）：
+访问 `http://127.0.0.1:3000`。如需修改 WebSocket 地址，可设置 `VITE_RUNTIME_WS`。
+
+## 页面路由
+
+| 路径 | 用途 |
+| --- | --- |
+| `/` | 新建会话与空状态 |
+| `/sessions/:sessionId` | 连续对话、任务执行与确认操作 |
+| `/settings` | 主题、模型、运行时和本地数据管理 |
+
+桌面静态构建使用 Hash Router，页面职责和后端接入说明见 [前端路由文档](docs/architecture/frontend-routes.md)。
+
+## 测试与构建
 
 ```bash
-cp .env.example .env   # 填入 AGENT_API_KEY / AGENT_BASE_URL / AGENT_MODEL
+# Python
+uv run pytest
+
+# 前端
+cd apps/desktop
+pnpm typecheck
+pnpm test
+pnpm generate
+
+# Rust
+cd src-tauri
+cargo test --locked
+cargo check --locked
 ```
 
-详见 [运行最小 demo](docs/getting-started/demo.md)。
+## 数据与安全
 
-## 评估
+- SQLite 是会话数据的唯一事实源。
+- `localStorage` 只保存主题等界面偏好和旧数据迁移标记。
+- API Key 不进入 SQLite、Pinia、日志或 Agent 事件，只由 Rust 写入系统钥匙串。
+- 附件首版只保存用户主动选择的本地路径与元数据，不自动读取或上传内容。
+- OpenAI、MCP、KV cache 和文档解析的生产适配器目前为明确占位；Mock 流程可完整运行。
 
-最小 eval 集（12 个 fixture，校准任务识别与推理强度，零 token 成本）：
+## 架构文档
 
-```bash
-uv run python -m demo_agent.eval
-```
+- [桌面架构](docs/architecture/desktop.md)
+- [Runtime Protocol v1](docs/architecture/runtime-protocol.md)
+- [前端路由与接入](docs/architecture/frontend-routes.md)
+- [委派树设计](docs/architecture/delegation-tree.md)
 
-强度分档对照实验（judge 打分，质量 vs token 成本，走真实模型）：
-
-```bash
-uv run python -m demo_agent.experiment
-```
-
-详见 [评估与校准](docs/architecture/eval.md)。
-
-## 文档
-
-完整文档见 [docs/](docs/index.md)，站点源码在 [`apps/docs/`](apps/docs/)（Vite + Vue 3 + naive-ui），并已通过 GitHub Actions 自动发布到 <https://haha-ha-cuo.github.io/AuroraAgent-demo/>。本地预览：
-
-```bash
-cd apps/docs
-pnpm install
-pnpm dev            # http://127.0.0.1:5173
-```
-
-## 开发约定
-
-- Python 环境统一用 [uv](https://docs.astral.sh/uv/) 管理，固定 Python 3.13（`.python-version`）。
-- 不引入 `langchain` 元包，直接用 `langchain-core` + `langgraph`（[ADR-003](docs/architecture/decisions.md)）。
-- 桌面壳新增 Rust（Tauri core）与 Nuxt/Vue3+TS 技术线，前端依赖用 pnpm 管理（[ADR-007](docs/architecture/decisions.md)）。
-- 提交与文档写作规范见 [贡献指南](docs/contributing.md)。
+贡献规范见 [docs/contributing.md](docs/contributing.md)。

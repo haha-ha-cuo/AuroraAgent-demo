@@ -14,7 +14,7 @@ import {
   zhCN,
   type GlobalThemeOverrides,
 } from 'naive-ui'
-import SideNav from './components/SideNav.vue'
+import SideNav from './components/SideNav/SideNav.vue'
 import { SITE } from './site'
 import { useTheme, type ThemeMode } from './composables/theme'
 

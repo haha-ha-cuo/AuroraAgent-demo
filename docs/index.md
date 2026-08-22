@@ -19,6 +19,8 @@
 | 了解项目是什么 | [项目简介](overview/introduction.md) |
 | 看看为什么这么设计 | [设计目标](overview/goals.md) |
 | 弄清整体怎么拼 | [总体架构](architecture/overview.md) |
+| 接入桌面运行时 | [运行时协议 v1](architecture/runtime-protocol.md) |
+| 接入前端页面 | [前端路由与后端接入](architecture/frontend-routes.md) |
 | 想本地跑起文档站 | [文档本地预览](getting-started/docs-preview.md) |
 | 了解接下来做什么 | [路线图](roadmap.md) |
 

@@ -13,9 +13,12 @@ tauri-build = { version = "2", features = [] }
 
 [dependencies]
 tauri = { version = "2", features = [] }
+tauri-plugin-dialog = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-
-# 阶段 C/D 按需引入（sidecar 监督已用 std::process，暂不依赖插件）：
-# tauri-plugin-shell、tauri-plugin-dialog、tauri-plugin-single-instance、
-# tauri-plugin-updater、keyring（钥匙串）。
+keyring = { version = "3", default-features = false, features = [
+  "apple-native",
+  "windows-native",
+  "linux-native-sync-persistent",
+  "crypto-rust",
+] }

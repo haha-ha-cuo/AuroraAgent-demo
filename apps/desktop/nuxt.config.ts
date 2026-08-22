@@ -5,6 +5,14 @@ export default defineNuxtConfig({
   ssr: false,
   telemetry: false,
   devtools: { enabled: false },
+  modules: ['@pinia/nuxt'],
+  components: [{ path: '~/components', pathPrefix: false }],
+  css: ['~/assets/main.css'],
+  router: {
+    options: {
+      hashMode: true,
+    },
+  },
   devServer: {
     host: '127.0.0.1',
     port: 3000,

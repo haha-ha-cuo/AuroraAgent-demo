@@ -6,9 +6,21 @@ __pycache__/
 .uv/
 .uv-cache/
 .pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.pyright/
+.coverage
+coverage.xml
+htmlcov/
+build/
+dist/
 
 # 密钥与本地配置
 .env
+.env.*
+!.env.example
+*.pem
+*.key
 
 # 文档站构建产物
 site/
@@ -20,14 +32,35 @@ node_modules/
 apps/desktop/dist/
 apps/desktop/.nuxt/
 apps/desktop/.output/
+apps/desktop/.nitro/
+apps/desktop/.cache/
+apps/desktop/coverage/
+apps/desktop/.vite/
 apps/desktop/src-tauri/target/
 apps/desktop/src-tauri/gen/
 
 # 本地依赖缓存（沙箱/CI 用，落到仓库内）
 .pnpm-cache/
 .cargo-home/
+.tmp/
+tmp/
+temp/
+
+# 本地运行时数据与日志
+*.sqlite
+*.sqlite-*
+*.sqlite3
+*.sqlite3-*
+*.db
+*.db-*
+*.log
+pnpm-debug.log*
+npm-debug.log*
+logs/
 
 # 系统与编辑器
 .DS_Store
+Thumbs.db
+Desktop.ini
 .idea/
 .vscode/

@@ -1,5 +1,7 @@
-"""最小纵向切片 demo：委派树 + 推理强度 + 能力特化层 + 本地 API 管理。"""
+"""Aurora Agent local runtime."""
 
-__all__ = ["__version__"]
+from .application.service import AgentService
+from .protocol import PROTOCOL_VERSION, ProtocolError
 
-__version__ = "0.1.0"
+__all__ = ["AgentService", "PROTOCOL_VERSION", "ProtocolError"]
+__version__ = "0.2.0"

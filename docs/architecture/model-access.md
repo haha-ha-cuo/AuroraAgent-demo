@@ -6,7 +6,7 @@
 
 模型不本地打包（放弃 Ollama / llama.cpp 的本地推理路线），统一通过**远程 API**访问；在应用内提供一层**本地 API 管理**，负责：
 
-- 密钥的本地保存与读取（环境变量 / 本地配置 / 系统钥匙串）；
+- 密钥的本地保存与读取（发布版使用系统钥匙串；开发运行可由环境变量注入）；
 - 端点（base_url）与模型名的统一配置；
 - 面向不同 Agent 的客户端构建；
 - 密钥脱敏与防泄露。
@@ -29,7 +29,7 @@ flowchart TB
     subgraph App[桌面应用]
         UI[前端 UI] --> API[本地 API 管理层]
         Agent[Agent 运行时] --> API
-        API --> KeyStore[(密钥本地存储<br/>env / 钥匙串)]
+        API --> KeyStore[(密钥本地存储<br/>系统钥匙串 / 开发环境变量)]
     end
     API -->|HTTPS| Remote[远程模型 API<br/>OpenAI / DeepSeek / ...]
 ```
@@ -38,7 +38,7 @@ flowchart TB
 
 1. **统一入口**：所有 Agent 通过管理层拿模型客户端，不在代码里散落 key；
 2. **密钥不泄露**：key 只用于构造客户端，不写入图状态、不打印、不进日志；
-3. **可切换供应商**：通过 `base_url + model + api_key` 三元组适配任意 OpenAI 兼容端点（OpenAI、DeepSeek、本地网关等）；
+3. **可切换供应商**：非敏感的 provider、`base_url` 与 model 写入 Python SQLite；`api_key` 由 Tauri Rust 直接写系统钥匙串，设置读取只返回是否已配置；
 4. **无 key 可运行**：未配置密钥时回退到 **mock 模式**，用确定性输出跑通流程（便于离线演示与测试）。
 
 ## 环境变量约定（demo）
@@ -49,6 +49,6 @@ flowchart TB
 | `AGENT_BASE_URL` | OpenAI 兼容端点 | `https://api.openai.com/v1` |
 | `AGENT_MODEL` | 模型名 | `gpt-4o-mini` |
 
-> 支持 `.env` 文件（`python-dotenv` 加载），示例见 `.env.example`。密钥文件不提交仓库。
+> 环境变量仅用于开发/测试注入，发布版以系统钥匙串为准。API Key 不进入 SQLite、Pinia、localStorage、Agent 事件或日志；设置更新需要时由 Rust 安全重启 sidecar。
 
 相关：[技术栈](../overview/tech-stack.md) · [运行最小 demo](../getting-started/demo.md) · [ADR-002](decisions.md#adr-002)。

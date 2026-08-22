@@ -1,132 +1,197 @@
 # 桌面应用架构
 
-> 本章为**落地规划**，对应 [ADR-007](decisions.md#adr-007)：桌面壳由 Electron（+React）切换为 **Tauri 2 + Nuxt（Vue 3 + TS）**，Python Agent 运行时以 sidecar 进程打包分发，进程间走 **stdio**。实现落地后如有调整将回写本页。
+桌面应用采用 **Tauri 2 + Nuxt（Vue 3 + TypeScript）+ Python sidecar**。Nuxt 负责交互，Rust 是可靠 broker 与系统能力边界，Python 承载 Agent 业务和 SQLite 数据。公共消息定义见[运行时协议 v1](runtime-protocol.md)。
 
-## 定位
+## 目标与边界
 
-桌面应用是项目的最终交付形态：把「本地 Python 运行时 + 远程模型」装进一个跨 macOS / Windows / Linux 的桌面壳，交付给终端用户。壳本身不承载 Agent 业务逻辑，只负责三件事：
+桌面壳负责：
 
-1. **承载前端 UI**（会话流、委派树可视化、确认门弹窗、设置页）；
-2. **监督 Python 运行时**（拉起、注入配置、崩溃检测、重启）；
-3. **中继与管理**（stdio 中继、钥匙串、更新、单实例、文件对话框）。
+1. 承载 Codex 风格工作台、连续对话、委派树、确认门和设置页；
+2. 监督 Python sidecar 的启动、停止、重启、崩溃恢复和健康状态；
+3. 关联请求/响应并转发全局事件；
+4. 通过系统钥匙串管理 API Key，通过系统文件选择器授予明确的文件引用。
 
-## 技术选型
-
-| 组件 | 角色 | 说明 |
-| --- | --- | --- |
-| [Tauri 2](https://tauri.app/) | 桌面壳 / 打包 | Rust 核心 + 系统 webview，体积小、内存低、能力权限最小化 |
-| [Nuxt](https://nuxt.com/) | 前端框架（SPA） | Vue 3 + TypeScript，`ssr: false`，取文件路由 / 自动导入 / 模块生态 |
-| Rust（`src-tauri`） | 系统胶水 + stdio 中继 | sidecar 监督、钥匙串、更新器、单实例、NDJSON 转发 |
-| Python sidecar | Agent 运行时 | 复用 `demo_agent/`，以 python-build-standalone + uv 打包 |
-
-> 「Nuxt 做逻辑 + Vue 做前端」= Nuxt（基于 Vue 3 + TS）承载前端应用与业务逻辑。桌面无 SSR 需求，故用 SPA 模式；若后续觉得 Nuxt 过重，可回退到「Vite + Vue 3 + TS」，共享同一组件层。
+Rust 不实现会话、运行和任务业务；Pinia 不作为持久化数据库；Python 不管理系统钥匙串或任意弹出文件选择器。
 
 ## 分层视图
 
 ```mermaid
 flowchart TB
-    subgraph WebView[WebView（Nuxt SPA / Vue 3 + TS）]
-        UI[会话流 · 委派树 · 确认门 · 设置]
+    subgraph WebView["Nuxt SPA / Vue 3"]
+        Pages["/ · /sessions/:sessionId · /settings"]
+        Stores["Pinia 缓存与事件归并"]
+        Pages --> Stores
     end
 
-    subgraph RustCore[Rust Core（src-tauri）]
-        direction LR
-        Sup[sidecar 监督]
-        Relay[stdio 中继]
-        Key[钥匙串]
-        Upd[更新器]
+    subgraph RustCore["Tauri Rust broker"]
+        Rpc["请求关联与事件转发"]
+        Supervisor["sidecar 监督与恢复"]
+        Secrets["系统钥匙串"]
+        Picker["文件选择器"]
     end
 
-    subgraph Sidecar[Python Agent Runtime（sidecar）]
-        Graph[LangGraph 委派图]
-        Cap[能力特化层]
-        Gate[确认门]
-        MCP[MCP 工具层]
-        API[本地 API 管理]
+    subgraph PythonRuntime["Python Agent runtime"]
+        Transport["stdio / WebSocket transport"]
+        App["应用服务与 Run Manager"]
+        Graph["LangGraph planner / workers / reporter"]
+        Ports["Model · MCP · KV cache · Parser ports"]
+        DB[("SQLite + WAL")]
+        Transport --> App
+        App --> Graph
+        Graph --> Ports
+        App --> DB
     end
 
-    UI <-->|invoke / event（通道 A）| RustCore
-    RustCore <-->|NDJSON over stdio（通道 B）| Sidecar
-    Key -->|env 注入| API
-    API -->|HTTPS| Remote[远程模型 API]
-    MCP --> Ext[外部工具 / 数据源]
+    Stores <-->|"Tauri invoke / runtime-event"| Rpc
+    Rpc <-->|"protocol v1 · NDJSON stdio"| Transport
+    Supervisor --> Transport
+    Secrets -->|"仅进程注入/安全通道"| Transport
+    Picker -->|"用户选择的路径与元数据"| Stores
 ```
 
-分层职责沿用[总体架构](overview.md)：仅替换「桌面壳」与「壳 ↔ 运行时」通信两处，运行时与基础设施层保持不变。
+## 数据所有权
 
-## 进程模型与通信
+| 数据 | 唯一事实源 | 允许缓存 | 禁止位置 |
+| --- | --- | --- | --- |
+| 会话、消息、运行、任务、附件、确认 | Python SQLite | Pinia 内存快照 | localStorage |
+| Provider、Base URL、模型 | Python SQLite | 设置页短期状态 | 日志中的敏感上下文 |
+| API Key | 系统钥匙串 | 设置输入框提交前的瞬时值 | Python SQLite、Pinia、localStorage、事件、日志 |
+| 主题、侧栏状态、迁移标记 | localStorage | Pinia UI Store | Agent 事件 |
+| runtime 连接状态 | Rust broker 真实状态 | Pinia | 前端乐观常量 |
 
-两条通道，职责分离：
+SQLite 启用 foreign keys、WAL、busy timeout 和版本化迁移。事件只通知变化；页面恢复必须重新读取 SQLite 快照。
 
-| 通道 | 链路 | 用途 |
-| --- | --- | --- |
-| A · Tauri IPC | 前端 ↔ Rust | 系统能力：钥匙串读写、sidecar 生命周期、文件对话框、更新 |
-| B · stdio 中继 | 前端 → Rust → Python | Agent 事件流：委派树、token、结果、确认门 |
+## Python runtime 分层
 
-**通道 B 采用 stdio（NDJSON 中继）**，运行时**不监听任何本地端口**：
-
-1. Rust spawn sidecar，建立其 stdin/stdout 管道；
-2. Python 在 stdout 上按行输出 JSON 事件（NDJSON），从 stdin 按行读取命令；
-3. Rust 把 stdout 事件转为 Tauri event 推给前端，把前端 `invoke` 命令写入 stdin；
-4. 密钥等配置由 Rust 经环境变量在 spawn 时注入，不进 webview。
-
-### 消息契约
-
-沿用 `demo_agent/server.py` 的 JSON 事件协议，但传输改为 **stdin/stdout 上的 NDJSON（每行一个 JSON 对象）**：
+建议按领域、应用、端口、适配器和传输拆包：
 
 ```text
-Python → Rust（stdout）: hello / run_start / plan{tasks[]} / task_start{task_id,description,effort}
-                         token{task_id,text} / task_result{task_id,result} / report{report}
-                         done / error{message} / confirm_request{request_id,action,risk}
-Rust → Python（stdin）:  {"type":"run","objective":string}
-                         {"type":"confirm","request_id":string,"approved":bool}
+demo_agent/
+  domain/          # 会话、运行、任务、消息等实体和值对象
+  application/     # session service、run manager、approval service
+  ports/           # ModelPort、McpPort、KvCachePort、DocumentParserPort
+  adapters/        # SQLite、确定性 mock、未来生产适配器
+  transport/       # envelope 校验、dispatcher、stdio、WebSocket
 ```
 
-约束：每条消息 `json.dumps` 紧凑序列化（内嵌字符串的换行被转义，不破坏行分帧），以 `\n` 分隔；Python 侧用 asyncio 读写 stdio 流，Rust 侧持续读取子进程 stdout 并转发。独立开发联调仍可用 `--port` 起 WS 服务。
+- 领域层不依赖 Tauri、WebSocket 或具体模型 SDK。
+- 应用层通过端口协调 LangGraph、事务、确认和取消。
+- SQLite adapter 是数据事实源，迁移与 CRUD 不得占位。
+- 无密钥时启用确定性 Mock planner/worker，完整产出递归任务、流式消息和报告。
+- 尚未实现的生产 Model/MCP/KV/文档解析 adapter 必须抛 `NotImplementedError`；抽象端口方法允许 `pass`。
+
+### Run Manager
+
+Run Manager 按 `session_id` 维护活动运行锁和取消令牌：
+
+- 同一会话最多一个活动运行；重复启动返回 `RUN_ALREADY_ACTIVE`。
+- 不同会话可以并行，事件均携带 `session_id` 和 `run_id`。
+- 取消是协作式的，worker 在安全点检查令牌；完成取消持久化后释放锁。
+- 重试创建新的 `run_id` 并记录来源，可重试整次失败运行或指定任务。
+- sidecar 崩溃恢复后清理遗留活动状态，避免永久锁死会话。
+
+### 确认门
+
+危险工具执行先持久化 approval，再发 `approval.requested`。批准、拒绝或超时都持久化明确结果，并发 `approval.resolved`。确认路径不得使用 `pass`，不得把“未收到回复”当作批准。
+
+## Rust broker
+
+Rust broker 维护 sidecar 进程句柄、stdin writer、stdout reader、pending request map 和 runtime 状态机。
+
+```mermaid
+stateDiagram-v2
+    [*] --> Starting
+    Starting --> Ready: runtime.ready
+    Starting --> Disconnected: 启动失败/超时
+    Ready --> Restarting: 设置更新或用户重启
+    Ready --> Disconnected: EOF/崩溃
+    Restarting --> Starting: 旧进程已安全终止
+    Disconnected --> Starting: 手动重启/有限退避恢复
+```
+
+### 请求与事件
+
+1. 前端提交 protocol v1 request envelope。
+2. Rust 在 pending map 登记 `request_id`，再写入 sidecar stdin。
+3. Python stdout 的 response 只完成相同 `request_id` 的 invoke；event 作为全局 `runtime-event` 广播。
+4. 超时、EOF、重启或崩溃必须用 `RUNTIME_UNAVAILABLE` 完成所有 pending request。
+5. Rust 缓存 runtime 状态供 `runtime.status` 使用，但 `ready` 只能来自已完成握手的 sidecar。
+
+stdio 使用 UTF-8 NDJSON，每行仅一个协议对象。Python stdout 禁止业务日志；stderr 可以记录脱敏诊断。独立开发和一致性测试可启用 WebSocket transport，它必须复用相同 dispatcher、模型和事件语义。
+
+### sidecar 生命周期
+
+- 应用启动时读取非敏感配置和钥匙串状态，启动 sidecar 并等待 `runtime.ready`。
+- 崩溃后记录退出码，广播 `runtime.disconnected`，按有限指数退避恢复；连续失败后等待用户重启。
+- 安全重启先停止接收新请求，结束/取消活动调用，终止旧进程，再创建全新的读写任务。
+- 应用退出时关闭 stdin 并等待子进程，超时后再强制终止，避免孤儿进程。
+
+## 钥匙串与模型设置
+
+前端 `settings.update` 的 `api_key` 由 Rust 截获并直接写系统钥匙串，不转发到普通日志或 SQLite。Python 只接收运行所需的安全注入，并通过 `settings.get` 暴露 `api_key_configured: boolean`。
+
+- Provider、Base URL、模型名属于非敏感配置，写入 SQLite。
+- 设置成功后清除前端输入框；任何响应都不回显 Key。
+- 配置需要重启时由 Rust 执行安全重启，UI 跟随真实状态变化。
+- 钥匙串不可用时返回 `KEYRING_UNAVAILABLE`，不得无提示回退明文文件。
+
+## 文件选择与附件
+
+Tauri 文件选择器是本地路径授权入口。前端只能把用户主动选择的路径、文件名、大小和 media type 作为附件引用传给 Python。
+
+- 首版不自动读取、上传或解析附件。
+- 不允许目录通配、父目录扩权或根据文件名猜测其他路径。
+- 文件在运行前失效时返回可理解错误并保留元数据。
+- `DocumentParserPort` 作为扩展点；未实现生产解析器时明确报 `NotImplementedError`，不能静默声称解析成功。
 
 ## 关键数据流
 
-1. **启动**：Rust 启动 → 读钥匙串 → spawn sidecar（注入 `AGENT_*`）→ 建立 stdio 管道 → Python 回 `hello` → Rust 转事件推前端 → UI 就绪。
-2. **一次任务**：前端 `invoke agent_run` → Rust 写 `run` 到 stdin → Python 回 `plan`/`task_start`/`token`/`task_result`/`report`/`done` → Rust 转发 → 前端渲染。
-3. **确认门**：write/execute 工具 → `gate.request` → `confirm_request` → Rust 转发 → 前端弹窗 → `invoke agent_confirm` → Rust 写 `confirm` → `gate.respond` 继续/拒绝（读放行、默认拒绝，见 [ADR-005](decisions.md#adr-005)）。
-4. **密钥配置**：设置页填 key → `set_api_key` → Rust 写钥匙串 → 重启 sidecar 生效；key 不经 webview、不打印（见 [ADR-002](decisions.md#adr-002)）。
+### 启动与恢复
 
-## 安全模型
+Rust spawn sidecar → Python 执行数据库迁移并打开 WAL → transport 发 `runtime.ready` → Rust 状态转 Ready 并转发 → 前端请求 `session.list`。若前端持有旧 localStorage 数据，再执行一次幂等 legacy import。
 
-- **Tauri 能力最小化**：前端默认无任意 fs/shell 权限，仅白名单命令；webview 无 Node 运行时；CSP 收紧。
-- **密钥与 webview 隔离**：钥匙串由 Rust 管理，仅以环境变量注入 sidecar，前端只读脱敏摘要。
-- **无网络监听面**：运行时仅经父子进程 stdio 管道通信，不开放本地端口，进一步收窄攻击面。
-- **确认门保留**：read 放行、write/execute 默认拒绝（[ADR-005](decisions.md#adr-005)）。
-- 与 ADR-005 待办（白名单/dry-run/沙箱、MCP 供应链、防提示注入）协同推进。
+### 连续对话
 
-## 跨平台打包与分发
+前端 `session.create` → Python 事务创建会话 → 前端 `run.start` → Python 写用户消息和运行 → LangGraph 规划/并行 worker/报告 → 事务提交后发消息、任务和运行事件。下一轮继续使用原 `session_id`，创建新 `run_id`。
 
-- **sidecar**：CI 三平台矩阵用 **python-build-standalone + uv** 组装自包含运行时——独立可重定位的 CPython + `uv pip install` 装好的站点包，作为资源目录随包分发，由薄启动器拉起 `python -m demo_agent.server --stdio`。不依赖系统 Python，且避免 PyInstaller 对 pydantic / langchain 动态导入的冻结风险。
-- **Tauri 打包**：macOS 双架构、Windows x64/ARM64、Linux deb/rpm/AppImage；macOS notarization + codesign、Windows 签名、Linux 签名。
-- **自动更新**：`tauri-plugin-updater` + 静态 JSON 发布源，开启签名校验。
-- **CI**：GitHub Actions OS 矩阵，产物与更新清单自动发布。
+### 多会话并行
 
-## 边界情况与失败模式
+会话 A 与 B 各自持有运行锁并可并行；Rust 不根据当前页面筛选事件，前端 Store 使用 `session_id/run_id/task_id` 归并。切换页面不会停止后台任务。
 
-- sidecar 崩溃/启动失败 → Rust 检测 stdout EOF + 退出码，UI 显示错误态 + 重启按钮；
-- 流式背压 → Python outbox 有界化，超出丢弃告警；Rust 读 stdout 持续转发，避免 UI 卡顿反压运行时；
-- 钥匙串不可用（Linux 无 secret service）→ 回退本地加密文件并提示；
-- 开发 vs 打包：开发用 `uv run python -m demo_agent.server --stdio`，打包用 bundled 运行时；
-- webview 差异（WKWebView / WebView2 / WebKitGTK）→ 三平台冒烟测试，Linux 声明 webkit2gtk 依赖；
-- 无密钥 mock 模式保持可离线演示；
-- 单实例 → 二次启动聚焦已有窗口。
+### 旧数据迁移
 
-## 分阶段路线
+前端检测 `demo-agent:sessions:v1` → 以稳定 `import_id` 调用 `session.import_legacy` → Python 在单个 SQLite 事务中写入合法记录与导入标记 → 返回计数。仅 `ok: true` 且无失败记录后，前端写迁移标记并删除旧 payload；否则原数据保留重试。
 
-- **A**：ADR-007 + 本页 + 回写 roadmap/tech-stack/README；
-- **B**：脚手架 Tauri 2 + Nuxt(SPA)；`server.py` 增 `--stdio` 传输；Rust 实现 NDJSON 中继；复刻 MVP 交互；
-- **C**：sidecar 监督、钥匙串、单实例；
-- **D**：python-build-standalone + uv 组装 sidecar、三平台 CI、签名/公证、自动更新；
-- **E**：会话持久化、任务树取消/重试、MCP 完整接入、能力特化层 v1、沙箱。
+## 安全要求
+
+- Tauri capability 最小化，webview 无任意 filesystem/shell 权限。
+- API Key 不进入 SQLite、Pinia、localStorage、请求/事件日志和 Agent 上下文。
+- `base_url` 等外部端点必须校验；错误响应与 stderr 脱敏。
+- Markdown/工具输出是不可信输入，前端渲染前清理 HTML。
+- 确认门默认拒绝并具有超时；危险操作不得绕过 transport/application 校验。
+- SQLite migration、transport、确认、取消、请求关联和 keyring 路径必须有测试，不能静默占位。
+
+## 测试与验收
+
+| 层 | 必测内容 |
+| --- | --- |
+| Python | SQLite CRUD/迁移、连续消息、并行/互斥、取消、重试、确认超时、Mock 树、stdio/WS 一致性 |
+| Rust | NDJSON 分帧、request 关联、事件转发、重启/崩溃恢复、keyring 抽象、无密钥日志 |
+| 前端 | 多运行隔离、会话管理、legacy import、附件、停止/重试、递归树、设置表单 |
+| 构建 | `uv run pytest`、`pnpm typecheck`、`pnpm test`、`pnpm generate`、`cargo test --locked`、`cargo check --locked` |
+| 桌面 | `pnpm tauri dev` 完成连续对话、两会话并行、停止、重试、确认、附件、重启恢复和设置更新 |
+
+视觉验收覆盖 1200×800、小窗口及 Windows 100%/125%/150% 缩放；侧栏与委派树撑满视口，输入框固定底部且无横向溢出。
+
+## 跨平台分发
+
+Python 环境和依赖统一由 uv 管理。发布时使用自包含 Python runtime 随 Tauri sidecar 分发，不依赖系统 Python。CI 覆盖 Windows、macOS、Linux，并对二进制和更新清单签名。
 
 ## 深入阅读
 
+- [运行时协议 v1](runtime-protocol.md)
+- [前端路由与接入](frontend-routes.md)
 - [总体架构](overview.md)
-- [模型接入与 API 管理](model-access.md)
-- [能力特化层](capability-layer.md)
-- [关键决策 (ADR)](decisions.md)
+- [任务委派树](delegation-tree.md)
+- [模型接入](model-access.md)
+- [关键决策](decisions.md)
