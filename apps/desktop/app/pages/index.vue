@@ -1,6 +1,5 @@
 <script setup lang="ts">
-import { NIcon, useMessage } from 'naive-ui'
-import { Robot } from '@vicons/tabler'
+import { useMessage } from 'naive-ui'
 
 const sessions = useSessionStore()
 const runtime = useRuntimeStore()
@@ -22,7 +21,7 @@ async function submit(objective: string, attachments: import('~/types/agent').At
 <template>
   <main class="home-page">
     <section class="welcome">
-      <span class="welcome-mark"><NIcon :component="Robot" :size="27" /></span>
+      <span class="welcome-mark"><img src="/logo.svg" alt="Demo Agent" /></span>
       <h1>今天要完成什么？</h1>
       <p>描述目标，Demo Agent 会规划任务、选择推理强度并委派给子 Agent。新对话默认创建在「默认项目」中，可在左侧新建或切换项目。</p>
     </section>
@@ -33,7 +32,7 @@ async function submit(objective: string, attachments: import('~/types/agent').At
         placeholder="例如：梳理项目架构，并给出下一阶段实施建议"
         @submit="submit"
       />
-      <p class="privacy-note">会话保存在本机 SQLite；文件仅传递你主动选择的路径引用</p>
+      <p class="privacy-note">会话保存在本机 SQLite；文档正文仅用于当前任务，不写入数据库</p>
     </div>
   </main>
 </template>
@@ -42,6 +41,7 @@ async function submit(objective: string, attachments: import('~/types/agent').At
 .home-page { position: relative; display: grid; width: 100%; height: 100%; place-items: center; padding: 28px 28px 170px; background: transparent; overflow: hidden; }
 .welcome { max-width: 560px; text-align: center; }
 .welcome-mark { display: grid; width: 52px; height: 52px; margin: 0 auto 20px; place-items: center; border: 1px solid var(--border); border-radius: 15px; background: var(--surface-muted); }
+.welcome-mark img { width: 30px; height: 30px; }
 .welcome h1 { margin: 0; font-size: clamp(24px, 3vw, 34px); font-weight: 650; letter-spacing: -.035em; }
 .welcome p { margin: 13px auto 0; color: var(--text-muted); font-size: 14px; line-height: 1.7; }
 .home-composer { position: absolute; right: 28px; bottom: 28px; left: 28px; width: min(860px, calc(100% - 56px)); margin: auto; }

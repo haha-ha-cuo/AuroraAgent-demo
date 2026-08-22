@@ -22,6 +22,13 @@ export const useRuntimeStore = defineStore('runtime', {
     approvalsFor: (state) => (sessionId: string) => state.approvals.filter((item) => item.sessionId === sessionId && item.status === 'pending'),
   },
   actions: {
+    restoreApprovals(items: ApprovalRequest[]) {
+      for (const item of items) {
+        const index = this.approvals.findIndex((approval) => approval.id === item.id)
+        if (index >= 0) this.approvals[index] = item
+        else this.approvals.push(item)
+      }
+    },
     async initialize() {
       if (initialized) return initialized
       initialized = (async () => {
@@ -101,8 +108,13 @@ export const useRuntimeStore = defineStore('runtime', {
       if (event.type === 'runtime.disconnected') { this.connectionStatus = 'disconnected'; this.lastError = String(payload.message ?? '运行时已断开') }
       if (event.type === 'project.updated') {
         const projects = useProjectStore()
-        if (payload.deleted) projects.remove(String(payload.project_id ?? payload.id ?? ''))
-        else if (payload.project) projects.upsert(payload.project)
+        const projectId = String(payload.project_id ?? payload.project?.id ?? payload.id ?? '')
+        if (payload.deleted) {
+          projects.remove(projectId)
+          if (projectId) sessions.removeByProject(projectId)
+        } else if (payload.project) {
+          projects.upsert(payload.project)
+        }
       }
       if (!sessionId) return
       let session = sessions.sessions.find((item) => item.id === sessionId)

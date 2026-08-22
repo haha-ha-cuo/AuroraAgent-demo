@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 import asyncio
+import os
 from collections.abc import Awaitable, Callable
 from pathlib import Path
 from typing import Any
 
 from demo_agent.adapters.mock_agent import MockAgent
+from demo_agent.adapters.openai_agent import OpenAiAgent
 from demo_agent.adapters.sqlite_repository import SqliteRepository
 from demo_agent.application.run_manager import RunManager
 from demo_agent.application.settings import api_key_configured, load_environment, resolve_settings
@@ -21,8 +23,24 @@ class AgentService:
         self.repository = SqliteRepository(database_path)
         self.repository.recover_interrupted()
         self._listeners: set[EventListener] = set()
-        self.run_manager = RunManager(self.repository, MockAgent(step_delay), self._broadcast, approval_timeout=approval_timeout)
+        self.step_delay = step_delay
+        self.run_manager = RunManager(self.repository, self._create_agent, self._broadcast, approval_timeout=approval_timeout)
         self.started_at = utc_now()
+
+    def _create_agent(self) -> Any:
+        settings = resolve_settings(self.repository.settings_get())
+        provider = settings["provider"].lower()
+        if provider == "mock":
+            return MockAgent(self.step_delay)
+        if provider != "openai":
+            raise ProtocolError("provider_unsupported", f"unsupported provider: {provider}")
+        api_key = os.environ.get("DEMO_AGENT_API_KEY") or os.environ.get("AGENT_API_KEY") or os.environ.get("OPENAI_API_KEY")
+        if not api_key:
+            raise ProtocolError("provider_not_configured", "OpenAI Provider 缺少 API Key，请在设置中配置")
+        model = str(settings["model"]).strip()
+        if not model:
+            raise ProtocolError("provider_not_configured", "OpenAI Provider 缺少模型名称")
+        return OpenAiAgent(model, api_key, str(settings["base_url"]))
 
     def add_listener(self, listener: EventListener) -> Callable[[], None]:
         self._listeners.add(listener)
@@ -88,11 +106,14 @@ class AgentService:
 
     async def _runtime_status(self) -> dict[str, Any]:
         settings = resolve_settings(self.repository.settings_get())
+        configured = api_key_configured()
         return {
             "connected": True,
-            "mode": "mock" if settings["provider"] == "mock" else "adapter_pending",
+            "mode": "mock" if settings["provider"] == "mock" else "openai",
             "provider": settings["provider"],
             "model": settings["model"],
+            "api_key_configured": configured,
+            "configuration_status": "ready" if settings["provider"] == "mock" or configured else "missing_api_key",
             "started_at": self.started_at,
             "database": self.repository.database_info(),
         }
@@ -209,11 +230,20 @@ class AgentService:
         return {**resolve_settings(self.repository.settings_get()), "api_key_configured": api_key_configured()}
 
     async def _handle_settings_update(self, params: dict[str, Any]) -> dict[str, Any]:
+        if "api_key" in params or "apiKey" in params:
+            raise ProtocolError("keychain_required", "API Key 只能由桌面应用写入系统钥匙串")
         public_values = {key: params[key] for key in ("provider", "base_url", "model") if key in params}
         if any(not isinstance(value, str) for value in public_values.values()):
             raise ProtocolError("invalid_params", "model settings must be strings")
+        if "provider" in public_values and public_values["provider"] not in {"mock", "openai"}:
+            raise ProtocolError("invalid_params", "provider must be mock or openai")
         stored = self.repository.settings_update(public_values)
-        return {**resolve_settings(stored), "api_key_configured": api_key_configured()}
+        configured = params.get("api_key_configured")
+        return {
+            **resolve_settings(stored),
+            "api_key_configured": configured if isinstance(configured, bool) else api_key_configured(),
+            "restart_required": isinstance(configured, bool),
+        }
 
     async def close(self) -> None:
         await self.run_manager.close()

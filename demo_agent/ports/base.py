@@ -38,11 +38,6 @@ class DocumentParserPort(ABC):
         pass
 
 
-class OpenAiModelAdapter(ModelPort):
-    async def stream(self, messages: list[dict[str, str]]) -> AsyncIterator[str]:
-        raise NotImplementedError("OpenAI production adapter is not implemented")
-
-
 class McpAdapter(McpPort):
     async def list_tools(self) -> list[dict[str, Any]]:
         raise NotImplementedError("MCP production adapter is not implemented")
@@ -57,8 +52,3 @@ class KvCacheAdapter(KvCachePort):
 
     async def set(self, key: str, value: bytes, ttl_seconds: int | None = None) -> None:
         raise NotImplementedError("KV cache production adapter is not implemented")
-
-
-class DocumentParserAdapter(DocumentParserPort):
-    async def parse(self, path: Path) -> str:
-        raise NotImplementedError("document parsing is not implemented")

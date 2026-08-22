@@ -11,7 +11,7 @@ Aurora Agent Demo 是一套面向桌面的多 Agent 工作台。用户提交目�
 - 同一会话单运行互斥、停止和失败重试
 - 递归委派树、任务状态和流式输出
 - 风险操作确认门
-- 本地文件引用与附件元数据
+- 桌面端 Markdown/TXT 本地解析与模型上下文
 - SQLite 会话、消息、运行和任务持久化
 - stdio 与 WebSocket 共用 Runtime Protocol v1
 - API Key 仅保存到系统钥匙串
@@ -121,14 +121,29 @@ bash scripts/build-sidecar.sh
 
 脚本用 python-build-standalone + uv 生成 `apps/desktop/src-tauri/resources/sidecar/`（独立 CPython + 站点包），Tauri 打包时作为 `bundle.resources` 随应用分发；Rust broker 优先使用该运行时，缺失时才回退到 `uv run` 开发模式。
 
+## 应用图标
+
+桌面/移动端图标由前端 `public/logo.png` 生成，替换时执行：
+
+```bash
+cd apps/desktop
+pnpm tauri icon public/logo.png
+```
+
+该命令会重写 `src-tauri/icons/` 下全部 PNG、ICNS、ICO、iOS 与 Android 图标。
+
 ## 数据与安全
 
 - SQLite 是项目、会话、消息、运行、任务与非敏感配置的唯一事实源。
 - 非敏感配置（Provider、Base URL、模型）以 SQLite 应用设置为准，`.env` 仅作为浏览器开发时的初始默认值。
 - API Key 不进入 SQLite、Pinia、日志或 Agent 事件，只由 Rust 写入系统钥匙串（开发时经 `.env` 或进程注入）。
 - `localStorage` 只保存主题、侧栏折叠等界面偏好和旧数据迁移标记。
-- 附件首版只保存用户主动选择的本地路径与元数据，不自动读取或上传内容。
-- OpenAI、MCP、KV cache 和文档解析的生产适配器目前为明确占位；Mock 流程可完整运行。
+- 附件只保存用户主动选择的本地路径与元数据；Markdown/TXT 正文按运行临时读取，不写入 SQLite 或日志，也不会自动上传到模型之外的服务。
+- OpenAI-compatible Provider 已接入计划、任务执行和最终报告；MCP 与 KV cache 生产适配器仍为明确占位。
+- 桌面端支持 UTF-8 的 `.md`、`.markdown`、`.txt`，最多 4 个文件、单文件 1 MiB、合计 2 MiB；只保存路径与元数据，不将正文写入 SQLite。
+- 浏览器开发模式不能获得可信本地路径，因此不提供附件选择；开发 API Key 通过环境变量注入。
+- SQLite schema v3 持久化项目、会话、消息、运行、任务、附件、审批和非敏感设置，并从 v1/v2 原地迁移。
+- 选择 OpenAI Provider 后配置或网络错误会明确失败并输出脱敏诊断，不会静默回退 Mock。
 
 ## 架构文档
 

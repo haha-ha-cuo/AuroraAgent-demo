@@ -43,6 +43,8 @@ export function normalizeRun(raw: Json, sessionId: string): RunRecord {
     objective: text(raw.objective), status: raw.status ?? 'queued', error: text(raw.error),
     createdAt: text(raw.created_at ?? raw.createdAt, new Date().toISOString()),
     updatedAt: text(raw.updated_at ?? raw.updatedAt, new Date().toISOString()),
+    retryOfRunId: text(raw.retry_of_run_id ?? raw.retryOfRunId) || null,
+    retryTaskId: text(raw.retry_task_id ?? raw.retryTaskId) || null,
   }
 }
 
@@ -82,6 +84,10 @@ export function normalizeSession(raw: Json): SessionRecord {
     messages: list(raw.messages).map((item) => normalizeMessage(item, id)),
     runs,
     tasks: list(raw.tasks).map((item) => normalizeTask(item, id, latestRun)).concat(nestedTasks),
+    approvals: list(raw.approvals).map((item) => ({
+      id: text(item.id), sessionId: text(item.session_id, id), runId: text(item.run_id), taskId: text(item.task_id) || null,
+      action: text(item.action), risk: text(item.risk), status: item.status ?? 'pending',
+    })),
   }
 }
 

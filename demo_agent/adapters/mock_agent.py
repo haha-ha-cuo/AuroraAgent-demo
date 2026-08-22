@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+from collections.abc import AsyncIterator
 from typing import TypedDict
 
 from langgraph.graph import END, START, StateGraph
@@ -32,7 +33,7 @@ class MockAgent:
             ]
         }
 
-    async def plan(self, objective: str) -> list[dict[str, str | None]]:
+    async def plan(self, objective: str, history: list[dict[str, str]] | None = None, documents: str = "") -> list[dict[str, str | None]]:
         result = await self._graph.ainvoke({"objective": objective, "tasks": []})
         return result["tasks"]
 
@@ -42,7 +43,33 @@ class MockAgent:
             raise RuntimeError("mock worker failure requested by objective")
         return f"已完成：{description}"
 
+    async def execute_stream(
+        self,
+        description: str,
+        objective: str,
+        history: list[dict[str, str]],
+        documents: str,
+        parent_output: str,
+    ) -> AsyncIterator[str]:
+        output = await self.execute(description, objective)
+        if documents and "执行核心" in description:
+            sample = " ".join(documents.split())[:160]
+            output += f"；已读取参考资料：{sample}"
+        if parent_output:
+            output += f"；已使用父任务结果：{parent_output[:80]}"
+        midpoint = max(1, len(output) // 2)
+        for chunk in (output[:midpoint], output[midpoint:]):
+            if chunk:
+                yield chunk
+
     @staticmethod
     def report(objective: str, outputs: list[str]) -> str:
         body = "\n".join(f"- {output}" for output in outputs)
         return f"## 执行完成\n\n目标：{objective}\n\n{body}"
+
+    async def report_stream(self, objective: str, history: list[dict[str, str]], documents: str, outputs: list[str]) -> AsyncIterator[str]:
+        report = self.report(objective, outputs)
+        midpoint = max(1, len(report) // 2)
+        for chunk in (report[:midpoint], report[midpoint:]):
+            if chunk:
+                yield chunk

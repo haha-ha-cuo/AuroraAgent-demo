@@ -21,7 +21,7 @@ def load_environment() -> None:
 
 
 def api_key_configured() -> bool:
-    return bool(os.environ.get("DEMO_AGENT_API_KEY") or os.environ.get("AGENT_API_KEY"))
+    return bool(os.environ.get("DEMO_AGENT_API_KEY") or os.environ.get("AGENT_API_KEY") or os.environ.get("OPENAI_API_KEY"))
 
 
 def env_defaults() -> dict[str, Any]:

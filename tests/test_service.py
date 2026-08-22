@@ -119,10 +119,14 @@ def test_approval_accept_and_timeout(tmp_path) -> None:
         resolved = await service.handle(request("approval.resolve", {"request_id": approval["payload"]["request_id"], "approved": True}))
         assert resolved["ok"]
         await wait_for(events, "run.completed")
+        approved_snapshot = (await service.handle(request("session.get", {"session_id": session_id})))["result"]
+        assert approved_snapshot["approvals"][0]["status"] == "approved"
 
         await service.handle(request("run.start", {"session_id": session_id, "objective": "[confirm] timeout"}, "timeout"))
         failed = await wait_for(events, "run.failed")
         assert "timed out" in failed[-1]["payload"]["error"]
+        expired_snapshot = (await service.handle(request("session.get", {"session_id": session_id})))["result"]
+        assert expired_snapshot["approvals"][-1]["status"] == "expired"
         await service.close()
 
     asyncio.run(scenario())

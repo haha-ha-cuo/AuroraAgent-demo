@@ -8,19 +8,14 @@ const props = withDefaults(defineProps<{ disabled?: boolean; loading?: boolean; 
 const emit = defineEmits<{ submit: [objective: string, attachments: AttachmentRef[]]; stop: [] }>()
 const value = ref('')
 const attachments = ref<AttachmentRef[]>([])
-const fileInput = ref<HTMLInputElement | null>(null)
+const desktopFilesAvailable = computed(() => isTauri())
 const resolvedPlaceholder = computed(() => props.loading ? '可以停止当前运行，或切换到其他会话' : props.disabled ? '运行时未连接，仍可浏览历史' : props.placeholder)
 
 async function chooseFiles() {
-  if (isTauri()) {
-    const { open } = await import('@tauri-apps/plugin-dialog')
-    const paths = await open({ multiple: true, directory: false })
-    for (const path of Array.isArray(paths) ? paths : paths ? [paths] : []) addAttachment(String(path), String(path).split(/[\\/]/).at(-1) ?? '附件', 0)
-  } else fileInput.value?.click()
-}
-function browserFiles(event: Event) {
-  for (const file of Array.from((event.target as HTMLInputElement).files ?? [])) addAttachment(`browser://${file.name}`, file.name, file.size, file.type)
-  ;(event.target as HTMLInputElement).value = ''
+  if (!desktopFilesAvailable.value) return
+  const { open } = await import('@tauri-apps/plugin-dialog')
+  const paths = await open({ multiple: true, directory: false, filters: [{ name: '文本文件', extensions: ['md', 'markdown', 'txt'] }] })
+  for (const path of Array.isArray(paths) ? paths : paths ? [paths] : []) addAttachment(String(path), String(path).split(/[\\/]/).at(-1) ?? '附件', 0)
 }
 function addAttachment(path: string, name: string, size: number, mediaType?: string) {
   if (!attachments.value.some((item) => item.path === path)) attachments.value.push({ id: `att_${crypto.randomUUID()}`, path, name, size, mediaType })
@@ -38,8 +33,7 @@ function onKeydown(event: KeyboardEvent) { if (event.key === 'Enter' && !event.s
     <div v-if="attachments.length" class="attachments"><NTag v-for="item in attachments" :key="item.id" closable size="small" @close="attachments = attachments.filter((other) => other.id !== item.id)">{{ item.name }}</NTag></div>
     <NInput v-model:value="value" type="textarea" :autosize="{ minRows: 1, maxRows: 6 }" :placeholder="resolvedPlaceholder" :disabled="disabled" class="composer-input" @keydown="onKeydown" />
     <div class="composer-footer">
-      <NTooltip><template #trigger><NButton quaternary circle size="small" :disabled="disabled || loading" aria-label="添加文件引用" @click="chooseFiles"><template #icon><NIcon :component="Paperclip" /></template></NButton></template>添加本地文件引用</NTooltip>
-      <input ref="fileInput" type="file" multiple hidden @change="browserFiles">
+      <NTooltip><template #trigger><span><NButton quaternary circle size="small" :disabled="disabled || loading || !desktopFilesAvailable" aria-label="添加文件引用" @click="chooseFiles"><template #icon><NIcon :component="Paperclip" /></template></NButton></span></template>{{ desktopFilesAvailable ? '添加 Markdown/TXT' : '本地文档仅桌面版支持' }}</NTooltip>
       <span class="composer-hint">Enter 发送 · Shift+Enter 换行</span>
       <NButton v-if="loading" circle secondary type="error" size="small" aria-label="停止运行" @click="emit('stop')"><template #icon><NIcon :component="PlayerStop" /></template></NButton>
       <NButton v-else circle type="primary" size="small" :disabled="disabled || !value.trim()" aria-label="发送" @click="submit"><template #icon><NIcon :component="ArrowUp" /></template></NButton>

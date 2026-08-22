@@ -31,6 +31,7 @@ export const useSessionStore = defineStore('sessions', {
         if (!Object.hasOwn(source, 'messages')) session.messages = previous.messages
         if (!Object.hasOwn(source, 'runs')) session.runs = previous.runs
         if (!Object.hasOwn(source, 'tasks') && !Array.isArray(source.runs)) session.tasks = previous.tasks
+        if (!Object.hasOwn(source, 'approvals')) session.approvals = previous.approvals
         this.sessions[index] = session
       }
       else this.sessions.push(session)
@@ -39,6 +40,9 @@ export const useSessionStore = defineStore('sessions', {
     remove(id: string) {
       this.sessions = this.sessions.filter((item) => item.id !== id)
       if (this.activeSessionId === id) this.activeSessionId = null
+    },
+    removeByProject(projectId: string) {
+      this.sessions = this.sessions.filter((item) => item.projectId !== projectId)
     },
     async loadAll() {
       if (this.loading) return
@@ -56,7 +60,9 @@ export const useSessionStore = defineStore('sessions', {
     },
     async load(id: string) {
       const result = await runtimeRequest<any>('session.get', { session_id: id })
-      return this.upsert(unwrap(result, 'session'))
+      const session = this.upsert(unwrap(result, 'session'))
+      useRuntimeStore().restoreApprovals(session.approvals)
+      return session
     },
     async create(title = '新对话', projectId?: string | null) {
       const result = await runtimeRequest<any>('session.create', { title, project_id: projectId || undefined })

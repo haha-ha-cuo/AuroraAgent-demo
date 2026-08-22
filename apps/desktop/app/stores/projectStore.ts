@@ -2,6 +2,7 @@ import { defineStore } from 'pinia'
 import type { ProjectRecord } from '~/types/agent'
 import { normalizeProject } from '~/utils/normalizers'
 import { runtimeRequest } from '~/utils/runtimeClient'
+import { useSessionStore } from '~/stores/sessionStore'
 
 const unwrap = (value: any, key: string) => value?.[key] ?? value
 
@@ -43,6 +44,16 @@ export const useProjectStore = defineStore('projects', {
         this.loaded = true
       } finally { this.loading = false }
     },
+    async get(id: string) {
+      const result = await runtimeRequest<any>('project.get', { project_id: id })
+      const project = this.upsert(result)
+      const rows = result?.sessions
+      if (Array.isArray(rows)) {
+        const sessionStore = useSessionStore()
+        for (const row of rows) sessionStore.upsert(row)
+      }
+      return project
+    },
     async create(name = '新项目') {
       const result = await runtimeRequest<any>('project.create', { name })
       const project = this.upsert(unwrap(result, 'project'))
@@ -56,6 +67,7 @@ export const useProjectStore = defineStore('projects', {
     async delete(id: string) {
       await runtimeRequest('project.delete', { project_id: id })
       this.remove(id)
+      useSessionStore().removeByProject(id)
     },
   },
 })

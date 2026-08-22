@@ -71,7 +71,7 @@ demo_agent/
   domain/          # 项目、会话、运行、任务、消息等实体和值对象
   application/     # project/session service、run manager、配置解析
   ports/           # ModelPort、McpPort、KvCachePort、DocumentParserPort
-  adapters/        # SQLite schema/仓储、确定性 mock、未来生产适配器
+  adapters/        # SQLite schema/仓储、确定性 mock、OpenAI-compatible 与本地文本适配器
   transport/       # envelope 校验、dispatcher、stdio、WebSocket
 ```
 
@@ -140,10 +140,10 @@ stdio 使用 UTF-8 NDJSON，每行仅一个协议对象。Python stdout 禁止�
 
 Tauri 文件选择器是本地路径授权入口。前端只能把用户主动选择的路径、文件名、大小和 media type 作为附件引用传给 Python。
 
-- 首版不自动读取、上传或解析附件。
+- 桌面端只读取用户明确选择的 UTF-8 Markdown/TXT；正文按运行临时进入 Agent 上下文，不写入 SQLite 或日志。
 - 不允许目录通配、父目录扩权或根据文件名猜测其他路径。
 - 文件在运行前失效时返回可理解错误并保留元数据。
-- `DocumentParserPort` 作为扩展点；未实现生产解析器时明确报 `NotImplementedError`，不能静默声称解析成功。
+- `DocumentParserPort` 由本地 UTF-8 Markdown/TXT 适配器实现；不支持的格式必须返回稳定错误，不能静默声称解析成功。
 
 ## 关键数据流
 

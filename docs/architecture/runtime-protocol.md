@@ -163,7 +163,7 @@ interface AttachmentWire {
 }
 ```
 
-附件是本地引用，不表示 runtime 已读取或上传文件。只有 Tauri 文件选择器返回且用户确认的路径可以进入协议。
+附件是用户确认的本地引用。`run.start` 在事务写入前校验并读取 UTF-8 Markdown/TXT；正文只进入当次 Agent 上下文，不写入 SQLite、事件或日志。只有 Tauri 文件选择器返回的路径可以进入协议。
 
 ## 请求方法
 
@@ -175,7 +175,7 @@ interface AttachmentWire {
 | `runtime.restart` | `{}` | `{ accepted: true }` | 安全终止并重启 sidecar；过程中发 runtime 事件 |
 | `session.list` | `{ query?, limit?, cursor? }` | `{ sessions, next_cursor? }` | 按 `updated_at` 降序列出摘要 |
 | `session.create` | `{ title? }` | `{ session }` | 创建空会话 |
-| `session.get` | `{ session_id }` | `{ session, messages, runs, tasks, attachments, approvals }` | 返回可完整恢复页面的快照 |
+| `session.get` | `{ session_id }` | `{ session, messages, runs, tasks, attachments, approvals }` | 返回可完整恢复页面的快照，运行含重试来源 |
 | `session.rename` | `{ session_id, title }` | `{ session }` | 重命名并更新 `updated_at` |
 | `session.delete` | `{ session_id }` | `{ deleted: true }` | 事务删除会话及关联实体；活动运行时拒绝或先显式取消 |
 | `session.import_legacy` | `{ import_id, sessions }` | `{ import_id, imported, skipped, failed, failures }` | 幂等、单事务导入旧浏览器记录 |
@@ -184,7 +184,7 @@ interface AttachmentWire {
 | `run.retry` | `{ session_id, run_id, task_id? }` | `{ run }` | 创建新运行重试失败运行或指定任务 |
 | `approval.resolve` | `{ session_id, run_id, approval_id, approved }` | `{ accepted: true }` | 解决待确认操作，幂等重复需返回当前结果或明确错误 |
 | `settings.get` | `{}` | `{ provider, base_url, model, api_key_configured }` | 不返回 Key 本身 |
-| `settings.update` | `{ provider, base_url, model, api_key? }` | `{ provider, base_url, model, api_key_configured, restart_required }` | 非敏感项写 SQLite，Key 由 Rust 写系统钥匙串 |
+| `settings.update` | `{ provider, base_url, model, api_key? }` | `{ provider, base_url, model, api_key_configured, restart_required }` | 非敏感项写 SQLite，Key 由 Rust 写系统钥匙串；浏览器端不得直接提交 Key |
 
 ### 并发语义
 
@@ -238,13 +238,15 @@ Python transport 负责协议校验和业务方法分派。stdio 与 WebSocket �
 
 ## 持久化与事务
 
-Python SQLite 启用 foreign keys、WAL 和版本化迁移，至少持久化 sessions、messages、runs、tasks、attachments、approvals、非敏感 settings 和 legacy import 记录。
+Python SQLite schema v3 启用 foreign keys、WAL 和版本化迁移，持久化 projects、sessions、messages、runs、tasks、attachments、approvals、非敏感 settings 和 legacy import 记录。
 
 - 创建消息/运行/任务及对应状态变更在事务内提交后才发事件。
 - 事件是变更通知，不是事实源；断线或漏事件后使用 `session.get` 重建。
 - `session.import_legacy` 以 `import_id` 幂等。所有合法导入写入与 import 记录处于同一事务；发生数据库异常时整体回滚。
 - 业务级无效记录可计入 `failed/failures`，但前端只有在 `failed === 0` 时删除旧 payload。
 - SQLite 禁止保存 API Key；模型 provider/base URL/model 可保存。
+- `run.start` 的 run、用户消息和附件必须在同一事务创建；附件解析失败不得留下 queued run。
+- OpenAI-compatible Provider 配置或请求失败时进入 failed 并生成脱敏诊断，不得静默回退 Mock。
 
 ## 扩展端口与占位规则
 

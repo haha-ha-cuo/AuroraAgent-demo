@@ -47,6 +47,8 @@ export interface RunRecord {
   error: string
   createdAt: string
   updatedAt: string
+  retryOfRunId?: string | null
+  retryTaskId?: string | null
 }
 
 export interface ProjectRecord {
@@ -66,6 +68,7 @@ export interface SessionRecord {
   messages: ConversationMessage[]
   runs: RunRecord[]
   tasks: TaskNode[]
+  approvals: ApprovalRequest[]
 }
 
 export interface ApprovalRequest {

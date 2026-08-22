@@ -5,7 +5,7 @@ demo 是一个**可运行的纵向切片**，用来验证核心架构假设，�
 1. **委派树**：根 Agent 规划 → 并行派发子 Agent → 汇总（LangGraph）。
 2. **推理强度**：规划阶段按任务复杂度给出 low / medium / high 档位。
 3. **能力特化层**：可插拔地注入上下文、工具、提示。
-4. **本地 API 管理**：密钥本地管理、不泄露；无密钥回退 mock 模式。
+4. **本地 API 管理**：密钥本地管理、不泄露；无密钥时显式选择 mock 模式。
 5. **确认门**：写/执行操作需确认，默认拒绝（[ADR-005](../architecture/decisions.md#adr-005)）。
 
 ## 安装依赖
@@ -33,7 +33,7 @@ uv run python -m demo_agent "列出项目文件结构，并阅读 README.md 总�
 
 | 变量 | 说明 | 默认 |
 | --- | --- | --- |
-| `AGENT_API_KEY` | API 密钥（回退 `OPENAI_API_KEY`） | 空 → mock |
+| `AGENT_API_KEY` | API 密钥（回退 `OPENAI_API_KEY`） | OpenAI 模式必填 |
 | `AGENT_BASE_URL` | OpenAI 兼容端点 | `https://api.openai.com/v1` |
 | `AGENT_MODEL` | 模型名 | `gpt-4o-mini` |
 

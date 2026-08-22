@@ -85,6 +85,8 @@ class AgentTask:
     output: str | None = None
     error: str | None = None
     position: int = 0
+    created_at: str = field(default_factory=utc_now)
+    updated_at: str = field(default_factory=utc_now)
 
     def to_dict(self) -> dict[str, Any]:
         value = asdict(self)
@@ -101,6 +103,8 @@ class Run:
     error: str | None = None
     created_at: str = field(default_factory=utc_now)
     updated_at: str = field(default_factory=utc_now)
+    retry_of_run_id: str | None = None
+    retry_task_id: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
         value = asdict(self)

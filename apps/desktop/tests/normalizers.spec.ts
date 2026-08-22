@@ -18,4 +18,14 @@ describe('backend cache normalization', () => {
     const session = normalizeSession({ id: 's1', title: '附件', messages: [{ id: 'm1', session_id: 's1', role: 'user', content: '看文件', attachments: [{ id: 'a1', name: 'a.md', path: 'C:/a.md', mime_type: 'text/markdown', size: 3 }] }] })
     expect(session.messages[0]?.attachments[0]).toMatchObject({ name: 'a.md', mediaType: 'text/markdown', size: 3 })
   })
+
+  it('restores approvals and retry relationships from a session snapshot', () => {
+    const session = normalizeSession({
+      id: 's1',
+      runs: [{ id: 'r2', retry_of_run_id: 'r1', retry_task_id: 't1' }],
+      approvals: [{ id: 'approval-1', session_id: 's1', run_id: 'r2', task_id: 't2', status: 'pending', action: '写文件', risk: '修改本地数据' }],
+    })
+    expect(session.runs[0]).toMatchObject({ retryOfRunId: 'r1', retryTaskId: 't1' })
+    expect(session.approvals[0]).toMatchObject({ id: 'approval-1', taskId: 't2', status: 'pending' })
+  })
 })

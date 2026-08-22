@@ -39,13 +39,13 @@ flowchart TB
 1. **统一入口**：所有 Agent 通过管理层拿模型客户端，不在代码里散落 key；
 2. **密钥不泄露**：key 只用于构造客户端，不写入图状态、不打印、不进日志；
 3. **可切换供应商**：非敏感的 provider、`base_url` 与 model 写入 Python SQLite；`api_key` 由 Tauri Rust 直接写系统钥匙串，设置读取只返回是否已配置；
-4. **无 key 可运行**：未配置密钥时回退到 **mock 模式**，用确定性输出跑通流程（便于离线演示与测试）。
+4. **无 key 可运行**：用户可显式选择 **mock 模式**，用确定性输出跑通流程；选择 OpenAI-compatible Provider 后缺少密钥必须明确失败，不能静默回退。
 
 ## 环境变量约定（demo）
 
 | 变量 | 说明 | 默认 |
 | --- | --- | --- |
-| `AGENT_API_KEY` | API 密钥（回退读 `OPENAI_API_KEY`） | 空 → mock 模式 |
+| `AGENT_API_KEY` | API 密钥（回退读 `OPENAI_API_KEY`） | OpenAI 模式必填 |
 | `AGENT_BASE_URL` | OpenAI 兼容端点 | `https://api.openai.com/v1` |
 | `AGENT_MODEL` | 模型名 | `gpt-4o-mini` |
 

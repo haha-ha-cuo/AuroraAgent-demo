@@ -39,6 +39,16 @@ apps/desktop/.vite/
 apps/desktop/src-tauri/target/
 apps/desktop/src-tauri/gen/
 
+# sidecar 构建产物（python-build-standalone + 站点包）
+apps/desktop/src-tauri/resources/sidecar/*
+!apps/desktop/src-tauri/resources/sidecar/.gitkeep
+.tmp-sidecar-venv/
+
+# 本地 SQLite 数据库及 WAL sidecar
+*.sqlite3
+*.sqlite3-wal
+*.sqlite3-shm
+
 # 本地依赖缓存（沙箱/CI 用，落到仓库内）
 .pnpm-cache/
 .cargo-home/

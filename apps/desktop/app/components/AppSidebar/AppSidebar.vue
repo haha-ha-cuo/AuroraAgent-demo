@@ -1,13 +1,12 @@
 <script setup lang="ts">
 import { NButton, NDropdown, NIcon, NScrollbar, NTooltip, useDialog, useMessage } from 'naive-ui'
-import { ChevronDown, ChevronLeft, ChevronRight, Dots, Folder, FolderPlus, Messages, Robot, Settings } from '@vicons/tabler'
+import { Apps, Bell, ChevronDown, ChevronRight, Clock, Dots, Edit, Folder, FolderPlus, GitPullRequest, Plus, Puzzle, Search, Settings } from '@vicons/tabler'
 import type { ProjectRecord, SessionRecord, TaskNode } from '~/types/agent'
 
 const props = defineProps<{ collapsed?: boolean }>()
 const route = useRoute()
 const sessions = useSessionStore()
 const projects = useProjectStore()
-const ui = useUiStore()
 const dialog = useDialog()
 const message = useMessage()
 const detailTask = ref<TaskNode | null>(null)
@@ -33,7 +32,20 @@ const projectGroups = computed(() => {
 
 function isExpanded(id: string) { return expandedProjects.value[id] ?? true }
 function toggleProject(id: string) { expandedProjects.value[id] = !isExpanded(id) }
-function toggleCollapse() { ui.sidebarCollapsed = !ui.sidebarCollapsed }
+
+function showUnavailable(feature: string) {
+  dialog.info({
+    title: feature,
+    content: '暂未开发，后续版本开放。',
+    positiveText: '知道了',
+  })
+}
+
+async function createConversation() {
+  const projectId = String(route.params.projectId ?? currentSession.value?.projectId ?? projects.projects[0]?.id ?? '')
+  if (projectId) await createSession(projectId)
+  else await navigateTo('/')
+}
 
 function projectMenuOptions(project: ProjectRecord) {
   return [
@@ -106,25 +118,37 @@ async function handleSessionMenu(key: string, session: SessionRecord) {
 <template>
   <aside class="sidebar" :class="{ collapsed }">
     <div class="brand-row">
-      <span class="brand-mark"><NIcon :component="Robot" :size="19" /></span>
+      <span class="brand-mark"><img src="/logo.svg" alt="Demo Agent" /></span>
       <strong v-if="!collapsed" class="brand-name">Demo Agent</strong>
-      <RuntimeStatus v-if="!collapsed" class="runtime" />
-      <NButton quaternary circle size="tiny" class="collapse-button" :aria-label="collapsed ? '展开菜单' : '收起菜单'" @click="toggleCollapse">
-        <template #icon><NIcon :component="collapsed ? ChevronRight : ChevronLeft" /></template>
-      </NButton>
+      <template v-if="!collapsed">
+        <NButton quaternary circle size="tiny" class="brand-action" aria-label="搜索" @click="showUnavailable('搜索')"><template #icon><NIcon :component="Search" :size="17" /></template></NButton>
+        <NButton quaternary circle size="tiny" class="brand-action" aria-label="通知" @click="showUnavailable('通知')"><template #icon><NIcon :component="Bell" :size="17" /></template></NButton>
+      </template>
     </div>
 
     <nav class="primary-nav" aria-label="主导航">
       <NTooltip placement="right" :disabled="!collapsed"><template #trigger>
-        <NButton quaternary class="nav-button" @click="createProject"><template #icon><NIcon :component="FolderPlus" /></template><span v-if="!collapsed" class="nav-label">新项目</span></NButton>
-      </template>新项目</NTooltip>
+        <NButton quaternary class="nav-button" aria-label="新对话" @click="createConversation"><template #icon><NIcon :component="Edit" :size="18" /></template><span v-if="!collapsed" class="nav-label">新对话</span><NIcon v-if="!collapsed" class="nav-end" :component="Plus" :size="15" /></NButton>
+      </template>新对话</NTooltip>
       <NTooltip placement="right" :disabled="!collapsed"><template #trigger>
-        <NButton quaternary class="nav-button" :class="{ active: route.path === '/settings' }" @click="navigateTo('/settings')"><template #icon><NIcon :component="Settings" /></template><span v-if="!collapsed" class="nav-label">设置</span></NButton>
-      </template>设置</NTooltip>
+        <NButton quaternary class="nav-button" aria-label="Git" @click="showUnavailable('Git')"><template #icon><NIcon :component="GitPullRequest" :size="18" /></template><span v-if="!collapsed" class="nav-label">Git</span></NButton>
+      </template>Git · 暂未开发</NTooltip>
+      <NTooltip placement="right" :disabled="!collapsed"><template #trigger>
+        <NButton quaternary class="nav-button" aria-label="站点" @click="showUnavailable('站点')"><template #icon><NIcon :component="Apps" :size="18" /></template><span v-if="!collapsed" class="nav-label">站点</span></NButton>
+      </template>站点 · 暂未开发</NTooltip>
+      <NTooltip placement="right" :disabled="!collapsed"><template #trigger>
+        <NButton quaternary class="nav-button" aria-label="已安排" @click="showUnavailable('已安排')"><template #icon><NIcon :component="Clock" :size="18" /></template><span v-if="!collapsed" class="nav-label">已安排</span></NButton>
+      </template>已安排 · 暂未开发</NTooltip>
+      <NTooltip placement="right" :disabled="!collapsed"><template #trigger>
+        <NButton quaternary class="nav-button" aria-label="插件" @click="showUnavailable('插件')"><template #icon><NIcon :component="Puzzle" :size="18" /></template><span v-if="!collapsed" class="nav-label">插件</span></NButton>
+      </template>插件 · 暂未开发</NTooltip>
     </nav>
 
     <section class="projects-section">
-      <div v-if="!collapsed" class="section-label"><NIcon :component="Messages" :size="14" /><span>项目</span></div>
+      <div class="section-label">
+        <span>项目</span><NIcon :component="ChevronDown" :size="13" />
+        <NButton v-if="!collapsed" quaternary circle size="tiny" class="new-project-button" aria-label="新建项目" @click="createProject"><template #icon><NIcon :component="FolderPlus" :size="15" /></template></NButton>
+      </div>
       <NScrollbar class="projects-scroll">
         <div v-for="group in projectGroups" :key="group.project.id" class="project-group">
           <div class="project-header" :class="{ active: route.params.projectId === group.project.id }">
@@ -156,6 +180,11 @@ async function handleSessionMenu(key: string, session: SessionRecord) {
     </section>
 
     <TaskTreePanel v-if="!collapsed" :tasks="currentTasks" @select="detailTask = $event" />
+    <nav class="sidebar-footer" aria-label="应用导航">
+      <NTooltip placement="right" :disabled="!collapsed"><template #trigger>
+        <NButton quaternary class="settings-nav" :class="{ active: route.path === '/settings' }" aria-label="设置" @click="navigateTo('/settings')"><template #icon><NIcon :component="Settings" :size="17" /></template><span v-if="!collapsed">设置</span></NButton>
+      </template>设置</NTooltip>
+    </nav>
     <TaskDetailsDrawer v-model:show="detailTask" />
   </aside>
 </template>
@@ -163,17 +192,24 @@ async function handleSessionMenu(key: string, session: SessionRecord) {
 <style scoped>
 .sidebar { display: flex; width: 100%; height: 100%; flex-direction: column; background: transparent; overflow: hidden; }
 .brand-row { display: flex; min-height: 56px; align-items: center; gap: 9px; padding: 0 13px; }
-.brand-mark { display: grid; width: 28px; height: 28px; flex: 0 0 28px; place-items: center; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); }
+.brand-mark { display: grid; width: 28px; height: 28px; flex: 0 0 28px; place-items: center; }
+.brand-mark img { width: 24px; height: 24px; }
 .brand-name { min-width: 0; flex: 1; font-size: 14px; white-space: nowrap; }
-.runtime { flex: 0 0 auto; }
-.collapse-button { flex: 0 0 auto; color: var(--text-muted); }
+.brand-action { flex: 0 0 auto; color: var(--text-muted); }
 
-.primary-nav { display: grid; gap: 2px; padding: 3px 8px 8px; }
+.primary-nav { display: grid; gap: 2px; padding: 4px 8px 13px; }
 .nav-button { width: 100%; height: 34px; justify-content: flex-start; color: var(--text); }
-.nav-button.active { background: var(--surface-hover); }
+.primary-nav :deep(.n-button__content) { width: 100%; }
+.nav-label { flex: 1; text-align: left; }
+.nav-end { flex: 0 0 auto; color: var(--text-muted); }
 
 .projects-section { display: flex; min-height: 180px; flex: 1; flex-direction: column; padding-bottom: 7px; }
 .section-label { display: flex; align-items: center; gap: 7px; padding: 7px 14px; color: var(--text-muted); font-size: 11px; font-weight: 650; letter-spacing: .05em; }
+.section-label span { font-size: 11px; }
+.section-label > :deep(.n-icon) { color: var(--text-muted); }
+.section-label .new-project-button { margin-left: auto; }
+.new-project-button { color: var(--text-muted); }
+.new-project-button:hover { color: var(--text); }
 .projects-scroll { min-height: 0; flex: 1; }
 .project-group { display: grid; gap: 1px; padding: 0 8px 7px; }
 .project-header { display: flex; align-items: center; gap: 2px; padding: 2px 4px; border-radius: 7px; color: var(--text); }
@@ -198,14 +234,21 @@ async function handleSessionMenu(key: string, session: SessionRecord) {
 .session-menu { display: grid; width: 22px; height: 22px; place-items: center; border-radius: 5px; color: var(--text-muted); opacity: 0; }
 .session-link:hover .session-menu, .session-link.active .session-menu { opacity: 1; }
 
+.sidebar-footer { padding: 7px 8px 9px; border-top: 1px solid var(--border); }
+.settings-nav { width: 100%; height: 34px; justify-content: flex-start; gap: 8px; color: var(--text-muted); }
+.settings-nav:hover, .settings-nav.active { color: var(--text); background: var(--surface-hover); }
+.settings-nav span { font-size: 12.5px; }
+
 .collapsed .brand-row { justify-content: center; padding: 0; }
-.collapsed .collapse-button { position: absolute; }
-.collapsed .primary-nav { padding: 6px 8px 10px; }
+.collapsed .primary-nav { padding: 4px 8px 10px; }
 .collapsed .nav-button { justify-content: center; padding: 0; }
 .collapsed .projects-section { min-height: 0; }
+.collapsed .section-label { display: none; }
 .collapsed .project-toggle { display: none; }
 .collapsed .project-name { justify-content: center; }
 .collapsed .project-sessions { padding-left: 0; }
 .collapsed .session-link { justify-content: center; padding: 8px; }
 .collapsed .session-status { flex-basis: 7px; }
+.collapsed .sidebar-footer { padding: 7px 8px 9px; }
+.collapsed .settings-nav { justify-content: center; padding: 0; }
 </style>

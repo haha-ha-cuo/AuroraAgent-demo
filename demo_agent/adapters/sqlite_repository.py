@@ -7,7 +7,8 @@ from contextlib import contextmanager
 from pathlib import Path
 from typing import Any
 
-from demo_agent.adapters.sqlite_schema import MIGRATION_V1_TO_V2, SCHEMA_V2
+from demo_agent.adapters.sqlite_maintenance import database_info, import_legacy, recover_interrupted
+from demo_agent.adapters.sqlite_schema import MIGRATION_V1_TO_V2, MIGRATION_V2_TO_V3, SCHEMA_V3
 from demo_agent.domain.models import (
     DEFAULT_PROJECT_ID,
     DEFAULT_PROJECT_NAME,
@@ -24,7 +25,7 @@ from demo_agent.protocol import ProtocolError
 
 
 class SqliteRepository:
-    SCHEMA_VERSION = 2
+    SCHEMA_VERSION = 3
 
     def __init__(self, path: str | Path) -> None:
         self.path = Path(path)
@@ -52,18 +53,28 @@ class SqliteRepository:
             connection.close()
 
     def _migrate(self) -> None:
-        with self._connect() as db:
+        db = self._connect()
+        try:
             db.execute("PRAGMA journal_mode = WAL")
             version = db.execute("PRAGMA user_version").fetchone()[0]
             if version > self.SCHEMA_VERSION:
                 raise RuntimeError(f"database version {version} is newer than supported")
+            if version == self.SCHEMA_VERSION:
+                return
+            scripts = {0: SCHEMA_V3, 1: MIGRATION_V1_TO_V2 + MIGRATION_V2_TO_V3, 2: MIGRATION_V2_TO_V3}
+            db.execute("PRAGMA foreign_keys = OFF")
+            db.executescript("BEGIN IMMEDIATE;\n" + scripts[version])
             if version == 0:
-                db.executescript(SCHEMA_V2)
                 self._seed_default_project(db)
-            elif version == 1:
-                db.executescript(MIGRATION_V1_TO_V2)
-                self._seed_default_project(db)
-                db.execute("UPDATE sessions SET project_id=? WHERE project_id IS NULL", (DEFAULT_PROJECT_ID,))
+            violations = db.execute("PRAGMA foreign_key_check").fetchall()
+            if violations:
+                raise RuntimeError("database migration failed foreign key validation")
+            db.commit()
+        except Exception:
+            db.rollback()
+            raise
+        finally:
+            db.close()
 
     @staticmethod
     def _seed_default_project(db: sqlite3.Connection) -> None:
@@ -133,8 +144,9 @@ class SqliteRepository:
             runs = [dict(row) for row in db.execute("SELECT * FROM runs WHERE session_id=? ORDER BY created_at", (session_id,))]
             for run in runs:
                 run["tasks"] = [dict(row) for row in db.execute("SELECT * FROM tasks WHERE run_id=? ORDER BY position", (run["id"],))]
+            approvals = [dict(row) for row in db.execute("SELECT * FROM approvals WHERE session_id=? ORDER BY created_at", (session_id,))]
         status = runs[-1]["status"] if runs else "idle"
-        return {**dict(session), "status": status, "messages": messages, "runs": runs}
+        return {**dict(session), "status": status, "messages": messages, "runs": runs, "approvals": approvals}
 
     def rename_session(self, session_id: str, title: str) -> dict[str, Any]:
         now = utc_now()
@@ -158,34 +170,22 @@ class SqliteRepository:
 
     def add_message(self, message: Message, attachments: list[dict[str, Any]] | None = None) -> dict[str, Any]:
         with self.transaction() as db:
-            db.execute(
-                "INSERT INTO messages(id,session_id,run_id,role,content,status,created_at) VALUES(?,?,?,?,?,?,?)",
-                (
-                    message.id,
-                    message.session_id,
-                    message.run_id,
-                    message.role,
-                    message.content,
-                    message.status,
-                    message.created_at,
-                ),
-            )
-            for attachment in attachments or []:
-                db.execute(
-                    "INSERT INTO attachments(id,message_id,path,name,size,mime_type) VALUES(?,?,?,?,?,?)",
-                    (
-                        attachment["id"],
-                        message.id,
-                        attachment["path"],
-                        attachment["name"],
-                        attachment.get("size"),
-                        attachment.get("mime_type"),
-                    ),
-                )
-            db.execute("UPDATE sessions SET updated_at=? WHERE id=?", (utc_now(), message.session_id))
+            self._insert_message(db, message, attachments or [])
         value = message.to_dict()
         value["attachments"] = attachments or []
         return value
+
+    @staticmethod
+    def _insert_message(db: sqlite3.Connection, message: Message, attachments: list[dict[str, Any]]) -> None:
+        db.execute(
+            "INSERT INTO messages(id,session_id,run_id,role,content,status,created_at) VALUES(?,?,?,?,?,?,?)",
+            (message.id, message.session_id, message.run_id, message.role, message.content, message.status, message.created_at),
+        )
+        db.executemany(
+            "INSERT INTO attachments(id,message_id,path,name,size,media_type) VALUES(?,?,?,?,?,?)",
+            [(item["id"], message.id, item["path"], item["name"], item.get("size"), item.get("media_type") or item.get("mime_type")) for item in attachments],
+        )
+        db.execute("UPDATE sessions SET updated_at=? WHERE id=?", (utc_now(), message.session_id))
 
     def update_message(self, message_id: str, *, content: str | None = None, status: str | None = None) -> None:
         fields: list[str] = []
@@ -205,10 +205,22 @@ class SqliteRepository:
     def add_run(self, run: Run) -> dict[str, Any]:
         with self.transaction() as db:
             db.execute(
-                "INSERT INTO runs(id,session_id,objective,status,error,created_at,updated_at) VALUES(?,?,?,?,?,?,?)",
-                (run.id, run.session_id, run.objective, str(run.status), run.error, run.created_at, run.updated_at),
+                "INSERT INTO runs(id,session_id,objective,status,error,retry_of_run_id,retry_task_id,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?)",
+                (run.id, run.session_id, run.objective, str(run.status), run.error, run.retry_of_run_id, run.retry_task_id, run.created_at, run.updated_at),
             )
         return run.to_dict()
+
+    def create_run_with_message(self, run: Run, message: Message, attachments: list[dict[str, Any]]) -> dict[str, Any]:
+        try:
+            with self.transaction() as db:
+                db.execute(
+                    "INSERT INTO runs(id,session_id,objective,status,error,retry_of_run_id,retry_task_id,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?)",
+                    (run.id, run.session_id, run.objective, str(run.status), run.error, run.retry_of_run_id, run.retry_task_id, run.created_at, run.updated_at),
+                )
+                self._insert_message(db, message, attachments)
+        except sqlite3.IntegrityError as exc:
+            raise ProtocolError("database_constraint", "run data violates a database constraint") from exc
+        return {**run.to_dict(), "message": {**message.to_dict(), "attachments": attachments}}
 
     def get_run(self, run_id: str) -> dict[str, Any]:
         with self._connect() as db:
@@ -226,7 +238,7 @@ class SqliteRepository:
     def add_tasks(self, tasks: list[AgentTask]) -> list[dict[str, Any]]:
         with self.transaction() as db:
             db.executemany(
-                "INSERT INTO tasks(id,run_id,session_id,parent_id,description,effort,status,output,error,position) VALUES(?,?,?,?,?,?,?,?,?,?)",
+                "INSERT INTO tasks(id,run_id,session_id,parent_id,description,effort,status,output,error,position,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)",
                 [
                     (
                         t.id,
@@ -239,6 +251,8 @@ class SqliteRepository:
                         t.output,
                         t.error,
                         t.position,
+                        t.created_at,
+                        t.updated_at,
                     )
                     for t in tasks
                 ],
@@ -248,9 +262,37 @@ class SqliteRepository:
     def update_task(self, task_id: str, status: TaskStatus, *, output: str | None = None, error: str | None = None) -> None:
         with self.transaction() as db:
             db.execute(
-                "UPDATE tasks SET status=?,output=COALESCE(?,output),error=? WHERE id=?",
-                (str(status), output, error, task_id),
+                "UPDATE tasks SET status=?,output=COALESCE(?,output),error=?,updated_at=? WHERE id=?",
+                (str(status), output, error, utc_now(), task_id),
             )
+
+    def get_run_attachments(self, run_id: str) -> list[dict[str, Any]]:
+        with self._connect() as db:
+            rows = db.execute(
+                "SELECT a.* FROM attachments a JOIN messages m ON m.id=a.message_id WHERE m.run_id=? AND m.role='user' ORDER BY a.rowid",
+                (run_id,),
+            ).fetchall()
+        return [dict(row) for row in rows]
+
+    def add_approval(self, value: dict[str, Any]) -> dict[str, Any]:
+        with self.transaction() as db:
+            db.execute(
+                "INSERT INTO approvals(id,run_id,session_id,task_id,action,risk,status,approved,expires_at,created_at,resolved_at) VALUES(?,?,?,?,?,?,?,?,?,?,?)",
+                tuple(
+                    value.get(key)
+                    for key in ("id", "run_id", "session_id", "task_id", "action", "risk", "status", "approved", "expires_at", "created_at", "resolved_at")
+                ),
+            )
+        return value
+
+    def resolve_approval(self, approval_id: str, status: str, approved: bool | None) -> None:
+        with self.transaction() as db:
+            changed = db.execute(
+                "UPDATE approvals SET status=?,approved=?,resolved_at=? WHERE id=? AND status='pending'",
+                (status, approved, utc_now(), approval_id),
+            ).rowcount
+            if not changed:
+                raise ProtocolError("not_found", "approval request not found")
 
     def settings_get(self) -> dict[str, Any]:
         with self._connect() as db:
@@ -268,67 +310,11 @@ class SqliteRepository:
                     )
         return self.settings_get()
 
-    def import_legacy(self, import_id: str, sessions: list[dict[str, Any]]) -> dict[str, int]:
-        imported = skipped = failed = 0
-        with self.transaction() as db:
-            existing = db.execute("SELECT summary FROM legacy_imports WHERE import_id=?", (import_id,)).fetchone()
-            if existing:
-                return json.loads(existing["summary"])
-            for index, raw in enumerate(sessions):
-                savepoint = f"legacy_{index}"
-                db.execute(f"SAVEPOINT {savepoint}")
-                try:
-                    session_id = str(raw["id"])
-                    title = str(raw.get("title") or "导入的会话")[:200]
-                    created = str(raw.get("createdAt") or raw.get("created_at") or utc_now())
-                    if db.execute("SELECT 1 FROM sessions WHERE id=?", (session_id,)).fetchone():
-                        skipped += 1
-                        continue
-                    db.execute(
-                        "INSERT INTO sessions(id,title,project_id,created_at,updated_at) VALUES(?,?,?,?,?)",
-                        (session_id, title, DEFAULT_PROJECT_ID, created, created),
-                    )
-                    for raw_message in raw.get("messages", []):
-                        db.execute(
-                            "INSERT INTO messages(id,session_id,run_id,role,content,status,created_at) VALUES(?,?,?,?,?,?,?)",
-                            (
-                                str(raw_message.get("id") or f"legacy_{session_id}_{imported}"),
-                                session_id,
-                                None,
-                                str(raw_message.get("role") or "assistant"),
-                                str(raw_message.get("content") or ""),
-                                "completed",
-                                str(raw_message.get("createdAt") or created),
-                            ),
-                        )
-                    imported += 1
-                    db.execute(f"RELEASE SAVEPOINT {savepoint}")
-                except (KeyError, TypeError, ValueError, sqlite3.IntegrityError):
-                    db.execute(f"ROLLBACK TO SAVEPOINT {savepoint}")
-                    db.execute(f"RELEASE SAVEPOINT {savepoint}")
-                    failed += 1
-            summary = {"imported": imported, "skipped": skipped, "failed": failed}
-            db.execute("INSERT INTO legacy_imports VALUES(?,?,?)", (import_id, utc_now(), json.dumps(summary)))
-        return summary
+    def import_legacy(self, import_id: str, sessions: list[dict[str, Any]]) -> dict[str, Any]:
+        return import_legacy(self, import_id, sessions)
 
     def database_info(self) -> dict[str, Any]:
-        with self._connect() as db:
-            version = db.execute("PRAGMA user_version").fetchone()[0]
-            sessions = db.execute("SELECT COUNT(*) FROM sessions").fetchone()[0]
-        return {"path": str(self.path), "schema_version": version, "session_count": sessions}
+        return database_info(self)
 
     def recover_interrupted(self) -> int:
-        with self.transaction() as db:
-            rows = db.execute("SELECT id FROM runs WHERE status IN ('queued','running','waiting')").fetchall()
-            run_ids = [row["id"] for row in rows]
-            if run_ids:
-                placeholders = ",".join("?" for _ in run_ids)
-                db.execute(
-                    f"UPDATE tasks SET status='failed',error='runtime interrupted' WHERE run_id IN ({placeholders}) AND status IN ('queued','running','waiting')",
-                    run_ids,
-                )
-                db.execute(
-                    f"UPDATE runs SET status='failed',error='runtime interrupted',updated_at=? WHERE id IN ({placeholders})",
-                    [utc_now(), *run_ids],
-                )
-        return len(run_ids)
+        return recover_interrupted(self)
