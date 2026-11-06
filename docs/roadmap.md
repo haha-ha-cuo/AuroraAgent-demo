@@ -12,7 +12,7 @@
 
 - [x] 最小纵向切片 demo：委派树 + 推理强度 + 能力特化层 + 本地 API 管理（见[运行最小 demo](getting-started/demo.md)）
 - [ ] 落地 LangGraph 委派树与检查点（生产化）
-- AuroraHarness 开发工作树已具备受限递归、计划校验与共享任务预算；持久检查点仍未完成，见[执行限制](architecture/execution-runtime.md)。
+- AuroraHarness 开发版已支持受限递归、计划校验、共享任务预算，以及人工输入等待点的同轮恢复。扩展工具的重启恢复仍待实现，见[检查点与执行限制](architecture/execution-runtime.md)。
 - [ ] 推理强度从启发式升级为 LLM 自适应决策
 - [ ] 打通 MCP 接入（当前 demo 以只读工具为占位）
 - [ ] 实现能力特化层接口（AuroraHarness 开发中：作用域、优先级、原子回退、权限交集与本轮能力清单；以实现合并和发布验收为准）
