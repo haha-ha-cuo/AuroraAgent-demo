@@ -36,6 +36,7 @@ export const NAV: NavItem[] = [
       { label: '总体架构', slug: 'architecture/overview' },
       { label: 'Python 模块职责', slug: 'architecture/python-modules' },
       { label: '桌面应用架构', slug: 'architecture/desktop' },
+      { label: '对话画布与调用轨迹', slug: 'architecture/conversation-canvas' },
       { label: '任务委派树', slug: 'architecture/delegation-tree' },
       { label: '推理强度', slug: 'architecture/reasoning-effort' },
       { label: '能力特化层', slug: 'architecture/capability-layer' },

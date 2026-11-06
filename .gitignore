@@ -70,6 +70,10 @@ npm-debug.log*
 logs/
 
 # 系统与编辑器
+# 浏览器界面验收产生的本地报告
+playwright-report/
+test-results/
+
 .DS_Store
 Thumbs.db
 Desktop.ini

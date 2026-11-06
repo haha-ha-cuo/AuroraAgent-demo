@@ -19,6 +19,8 @@ Aurora Agent Demo 是一套面向桌面的多 Agent 工作台。用户提交目�
 
 ## 设计更新
 
+新增[对话运行画布与调用轨迹](docs/architecture/conversation-canvas.md)，介绍 AuroraHarness 开发工作树中的双视图、真实调用时间线、审批与取消边界、移动布局及验证截图。当前仍有核心功能缺口，本轮没有发布新桌面安装包。
+
 能力特化层新增[本轮能力清单与第一版接口方案](docs/architecture/capability-layer.md#第一版接口与可解释执行)，包含作用域、确定性优先级、回退及权限交集。示例面向 AuroraHarness 的开发实现；本仓库 demo 的交付状态仍以[路线图](docs/roadmap.md)为准。[贡献指南](docs/contributing.md#python-模块命名)与[全仓 Python 模块职责清单](docs/architecture/python-modules.md)记录了按职责命名模块的规则、调整映射和打包验收边界。
 
 ## 技术栈

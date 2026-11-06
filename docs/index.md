@@ -21,6 +21,7 @@
 | 弄清整体怎么拼 | [总体架构](architecture/overview.md) |
 | 接入桌面运行时 | [运行时协议 v1](architecture/runtime-protocol.md) |
 | 接入前端页面 | [前端路由与后端接入](architecture/frontend-routes.md) |
+| 查看新版对话和真实调用轨迹 | [对话运行画布](architecture/conversation-canvas.md) |
 | 想本地跑起文档站 | [文档本地预览](getting-started/docs-preview.md) |
 | 了解接下来做什么 | [路线图](roadmap.md) |
 

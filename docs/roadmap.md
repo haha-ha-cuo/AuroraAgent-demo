@@ -32,6 +32,7 @@
 - [x] 前端接通 stdio 中继（`useRuntime` 接入 Tauri `invoke`/`listen`）+ MVP 交互（会话/委派树/确认门/流式）
 - [ ] Rust 核心：sidecar 监督 + 钥匙串 + 单实例
 - [ ] 生产化：会话持久化、任务树交互（取消/重试）
+- [ ] AuroraHarness 对话画布与调用轨迹发布验收（开发工作树已实现，含真实工具记录、筛选、轮次切换和移动布局；[设计与验证证据](architecture/conversation-canvas.md)）
 
 ## 阶段四：发布分发
 
