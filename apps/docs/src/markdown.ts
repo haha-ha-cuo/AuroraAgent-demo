@@ -99,6 +99,13 @@ export function renderMarkdown(src: string, currentSlug: string, baseUrl: string
   })
 
   md.use(attrs)
+  const renderImage = md.renderer.rules.image || ((tokens, idx, opts, _env, self) => self.renderToken(tokens, idx, opts))
+  md.renderer.rules.image = (tokens, idx, opts, env, self) => {
+    const token = tokens[idx]
+    const source = token.attrGet('src') || ''
+    if (source.startsWith('/images/')) token.attrSet('src', baseUrl + source.slice(1))
+    return renderImage(tokens, idx, opts, env, self)
+  }
 
   // 收集标题、为缺失的标题补 id（供锚点与「本页目录」使用）
   md.core.ruler.push('collect_headings', (state) => {

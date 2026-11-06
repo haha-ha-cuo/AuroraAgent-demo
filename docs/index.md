@@ -1,37 +1,14 @@
-# Demo · CodeX-like AI Agent
+# Aurora
 
-形如 CodeX 的**全平台桌面 AI Agent 应用**：拿到一个项目后，Agent 会把任务委派给子 Agent，由 Agent 自身决定委派质量（推理强度），并通过可对外扩展的**能力特化层**让用户特化 Agent 的能力。
+在本地项目中发送任务、确认操作，查看执行过程与结果。
 
-> 当前处于**阶段一：文档站**。本仓库的架构章节为**参考设计**，待实现落地后逐步回填为实际行为文档。
+## 开始使用
 
-## 核心特性
+- [快速开始](getting-started/demo.md)：启动应用，完成第一个任务。
+- [对话与调用轨迹](architecture/conversation-canvas.md)：发送、停止与回看调用。
 
-- **任务委派树**：根 Agent 将任务分解为树形结构，逐层委派给子 Agent（LangGraph 承载）。
-- **自适应推理强度**：Agent 自行决定每次委派的质量档位，类比 CodeX 的 reasoning effort。
-- **能力可特化**：在能力特化层对外开放接口，用户可自定义特化 Agent 的上下文、工具、提示与检索策略。
-- **MCP 工具生态**：通过 MCP 接入外部工具与数据源。
-- **全平台分发**：面向 macOS / Windows / Linux 的桌面应用形态。
+## 进一步了解
 
-## 快速入口
-
-| 想做的事 | 前往 |
-| --- | --- |
-| 了解项目是什么 | [项目简介](overview/introduction.md) |
-| 看看为什么这么设计 | [设计目标](overview/goals.md) |
-| 弄清整体怎么拼 | [总体架构](architecture/overview.md) |
-| 接入桌面运行时 | [运行时协议 v1](architecture/runtime-protocol.md) |
-| 接入前端页面 | [前端路由与后端接入](architecture/frontend-routes.md) |
-| 查看新版对话和真实调用轨迹 | [对话运行画布](architecture/conversation-canvas.md) |
-| 想本地跑起文档站 | [文档本地预览](getting-started/docs-preview.md) |
-| 了解接下来做什么 | [路线图](roadmap.md) |
-
-## 技术栈速览
-
-- [LangChain Core](https://www.langchain.com/) —— Agent 核心抽象（`langchain-core`）
-- [LangGraph](https://www.langchain.com/langgraph) —— 有状态的任务委派图
-- [MCP](https://modelcontextprotocol.io/) —— 模型上下文协议，工具/数据接入
-- 能力特化层 —— 可插拔的上下文 / 工具 / 提示 / 检索策略
-- 本地 API 管理层 —— 远程模型接入 + 密钥本地管理
-- uv —— Python 环境与依赖管理
-
-详见[技术栈](overview/tech-stack.md)。
+- [模型与 API 配置](architecture/model-access.md)
+- [项目架构](architecture/overview.md)
+- [开发进度](roadmap.md)

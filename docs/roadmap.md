@@ -12,6 +12,7 @@
 
 - [x] 最小纵向切片 demo：委派树 + 推理强度 + 能力特化层 + 本地 API 管理（见[运行最小 demo](getting-started/demo.md)）
 - [ ] 落地 LangGraph 委派树与检查点（生产化）
+- AuroraHarness 开发工作树已具备受限递归、计划校验与共享任务预算；持久检查点仍未完成，见[执行限制](architecture/execution-runtime.md)。
 - [ ] 推理强度从启发式升级为 LLM 自适应决策
 - [ ] 打通 MCP 接入（当前 demo 以只读工具为占位）
 - [ ] 实现能力特化层接口（AuroraHarness 开发中：作用域、优先级、原子回退、权限交集与本轮能力清单；以实现合并和发布验收为准）
@@ -32,7 +33,7 @@
 - [x] 前端接通 stdio 中继（`useRuntime` 接入 Tauri `invoke`/`listen`）+ MVP 交互（会话/委派树/确认门/流式）
 - [ ] Rust 核心：sidecar 监督 + 钥匙串 + 单实例
 - [ ] 生产化：会话持久化、任务树交互（取消/重试）
-- [ ] AuroraHarness 对话画布与调用轨迹发布验收（开发工作树已实现，含真实工具记录、筛选、轮次切换和移动布局；[设计与验证证据](architecture/conversation-canvas.md)）
+- [ ] AuroraHarness 对话与调用轨迹发布验收（开发工作树已实现精简时间线与苹方字体；[使用方式](architecture/conversation-canvas.md)）
 
 ## 阶段四：发布分发
 

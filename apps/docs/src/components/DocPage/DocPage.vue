@@ -195,10 +195,10 @@ function scrollToHeading(id: string) {
     </div>
 
     <template v-else-if="rendered">
-      <div class="doc-grid">
+      <div class="doc-grid" :class="{ compact: toc.length < 4 }">
         <article class="markdown-body" v-html="rendered.html"></article>
 
-        <aside v-if="toc.length" class="doc-toc">
+        <aside v-if="toc.length >= 4" class="doc-toc">
           <div class="toc-title">本页目录</div>
           <nav class="toc-list">
             <a

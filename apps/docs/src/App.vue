@@ -27,6 +27,7 @@ const themeOverrides: GlobalThemeOverrides = {
     primaryColorPressed: '#3B55DB',
     primaryColorSuppl: '#4C6FFF',
     borderRadius: '6px',
+    fontFamily: 'var(--font-doc)',
   },
 }
 
@@ -97,8 +98,7 @@ function onNavigate() {
             </n-button>
 
             <router-link to="/" class="brand">
-              <span class="brand-mark">◆</span>
-              <span class="brand-text">Demo · AI Agent</span>
+              <span class="brand-text">Aurora</span>
               <span class="brand-sub">文档</span>
             </router-link>
           </div>

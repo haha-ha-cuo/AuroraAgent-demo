@@ -15,11 +15,11 @@ export type NavItem = NavLeaf | NavGroup
 export const NAV: NavItem[] = [
   { label: '首页', slug: 'index' },
   {
-    label: '快速开始',
+    label: '使用指南',
     children: [
+      { label: '快速开始', slug: 'getting-started/demo' },
       { label: '环境准备', slug: 'getting-started/prerequisites' },
-      { label: '文档本地预览', slug: 'getting-started/docs-preview' },
-      { label: '运行最小 demo', slug: 'getting-started/demo' },
+      { label: '对话与调用轨迹', slug: 'architecture/conversation-canvas' },
     ],
   },
   {
@@ -36,8 +36,8 @@ export const NAV: NavItem[] = [
       { label: '总体架构', slug: 'architecture/overview' },
       { label: 'Python 模块职责', slug: 'architecture/python-modules' },
       { label: '桌面应用架构', slug: 'architecture/desktop' },
-      { label: '对话画布与调用轨迹', slug: 'architecture/conversation-canvas' },
       { label: '任务委派树', slug: 'architecture/delegation-tree' },
+      { label: '执行校验与限制', slug: 'architecture/execution-runtime' },
       { label: '推理强度', slug: 'architecture/reasoning-effort' },
       { label: '能力特化层', slug: 'architecture/capability-layer' },
       { label: '模型接入与 API 管理', slug: 'architecture/model-access' },
