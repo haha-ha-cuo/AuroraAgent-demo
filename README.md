@@ -17,6 +17,10 @@ Aurora Agent Demo 是一套面向桌面的多 Agent 工作台。用户提交目�
 - API Key 仅保存到系统钥匙串
 - 系统、浅色和深色三档主题
 
+## 设计更新
+
+能力特化层新增[本轮能力清单与第一版接口方案](docs/architecture/capability-layer.md#第一版接口与可解释执行)，包含作用域、确定性优先级、回退及权限交集。示例面向 AuroraHarness 的开发实现；本仓库 demo 的交付状态仍以[路线图](docs/roadmap.md)为准。[贡献指南](docs/contributing.md#python-模块命名)补充了按职责命名 Python 模块的规则。
+
 ## 技术栈
 
 - 桌面端：Tauri 2、Rust

@@ -14,7 +14,8 @@
 - [ ] 落地 LangGraph 委派树与检查点（生产化）
 - [ ] 推理强度从启发式升级为 LLM 自适应决策
 - [ ] 打通 MCP 接入（当前 demo 以只读工具为占位）
-- [ ] 实现能力特化层接口（第一版，作用域 / 优先级 / 回退）
+- [ ] 实现能力特化层接口（AuroraHarness 开发中：作用域、优先级、原子回退、权限交集与本轮能力清单；以实现合并和发布验收为准）
+- [ ] 能力清单可视化与声明式配方（新增设计，尚未实现；见[能力特化层](architecture/capability-layer.md#本轮能力清单)）
 - [x] 安全权限模型·确认门（风险分级 + 默认拒绝，[ADR-005](architecture/decisions.md#adr-005)）
 - [ ] 安全权限模型·白名单 / dry-run / 沙箱（[ADR-005](architecture/decisions.md#adr-005)）
 - [x] 最小 eval 集（12 个 fixture，校准任务识别与推理强度，[ADR-006](architecture/decisions.md#adr-006)）
