@@ -13,14 +13,15 @@
 - [x] 最小纵向切片 demo：委派树 + 推理强度 + 能力特化层 + 本地 API 管理（见[运行最小 demo](getting-started/demo.md)）
 - [ ] 落地 LangGraph 委派树与检查点（生产化）
 - AuroraHarness 开发版已支持受限递归、计划校验、共享任务预算，以及人工输入等待点的同轮恢复。同计划内支持依赖调度、只读子树并行和阻断任务的局部重试。扩展工具的重启恢复与失败后的自动重规划仍待实现。见[执行校验与资源限制](architecture/execution-runtime.md)。
-- [ ] 推理强度从启发式升级为 LLM 自适应决策
+- [x] 规划器选择 low / medium / high，委派 worker 按档位应用提示、输出与规划上限
+- [ ] 按实际结果或资源预算自动升降档
 - [ ] 打通 MCP 接入（当前 demo 以只读工具为占位）
 - [ ] 实现能力特化层接口（AuroraHarness 开发中：作用域、优先级、原子回退、权限交集与本轮能力清单；以实现合并和发布验收为准）
 - [ ] 能力清单可视化与声明式配方（新增设计，尚未实现；见[能力特化层](architecture/capability-layer.md#本轮能力清单)）
 - [x] 安全权限模型·确认门（风险分级 + 默认拒绝，[ADR-005](architecture/decisions.md#adr-005)）
 - [ ] 安全权限模型·白名单 / dry-run / 沙箱（[ADR-005](architecture/decisions.md#adr-005)）
-- [x] 最小 eval 集（12 个 fixture，校准任务识别与推理强度，[ADR-006](architecture/decisions.md#adr-006)）
-- [x] eval 升级：judge 打分 + 强度分档对照实验（[ADR-006](architecture/decisions.md#adr-006)）
+- [x] 14 项离线评估用例覆盖规划、强度、工具结果、审批与依赖阻断
+- [x] 两项文本任务的强度对照实验，按次记录 judge 评分及 worker / judge 用量。[评估与校准](architecture/eval.md)
 
 ## 阶段三：桌面壳
 

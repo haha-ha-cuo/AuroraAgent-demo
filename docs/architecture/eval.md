@@ -1,107 +1,35 @@
-# 评估与校准（eval）
+# 评估与校准
 
-> 对应 [ADR-006](decisions.md#adr-006)。最小 eval 集用于校准「任务识别 + 推理强度分档」，是后续把启发式规划器升级为 LLM 规划器时的**同一把尺子**。
+以下命令在 AuroraHarness 仓库根目录执行。
 
-## 为什么需要
+## 离线基准
 
-「自适应推理强度」要成立，前提是能回答：*高强度档位是否真的更优？* 没有基准，强度分档就是拍脑袋。最小 eval 集用**确定性、零成本**的方式先锁定当前启发式的正确性，后续再叠加 judge 与成本曲线。
-
-## 设计取舍
-
-- **mock 模式运行**：不依赖密钥与网络，零 token 成本，可反复跑、可进 CI。
-- **两类断言**：
-  1. **规划**：任务识别（`tasks_include`）与强度分档（`effort_is`）；
-  2. **端到端**：结果包含期望内容（`result_contains`）。
-- **fixture 是数据不是代码**：新增用例只需往 `FIXTURES` 列表加一个 `EvalCase`。
-
-## 运行
-
-```bash
-uv run python -m demo_agent.eval
+```sh
+uv run aurora eval
+uv run aurora eval --list
+uv run aurora eval --case dependency_denied --json
 ```
 
-输出逐项 PASS/FAIL 与断言详情，末尾汇总 `N/M 通过`；任一失败返回非零退出码。
+默认运行 14 个确定性用例。每项使用独立临时工作区，规划器根据任务指令识别操作，实际的计划校验、确认门和文件工具负责执行。断言核对任务、档位、工具结果和最终文件。例如拒绝写入时，依赖该文件的读取应被阻断，独立读取仍应成功。
 
-```text
-最小 eval 集（mock 模式，12 项）
+报告逐项列出期望值与观测值，最后汇总通过数。全部通过返回 0，验收失败返回 1，选择了不存在的用例等参数错误返回 2。默认运行无需网络、模型凭据或 token。可在 `src/agent/src/aurora/eval/fixtures.py` 增加数据用例。
 
-[PASS] plan_list_files
-      ✓ 任务含 ['list_files']
-      ✓ list_files 强度 low（期望 low）
-...
-结果：12/12 通过
+## 模型对照实验
+
+```sh
+uv run aurora eval --live --list
+uv run aurora eval --live --task compare_architecture --tiers low,high --repeat 2 --json
 ```
 
-同时纳入 pytest 回归：`tests/test_eval.py` 断言全部 fixture 通过，任何改动破坏规划/分档都会在 `uv run pytest` 暴露。
+只有显式选择 `--live` 并运行实验才会调用模型并产生 token 用量。CLI 读取 `AGENT_MODEL`、`AGENT_API_KEY`（也接受 `OPENAI_API_KEY`），兼容端点可通过 `AGENT_BASE_URL` 指定。默认对两个文本任务各跑三档，每档一次。
 
-## 新增 fixture
-
-```python
-from demo_agent.eval import EvalCase, tasks_include, effort_is, result_contains
-
-EvalCase(
-    "my_case",
-    "某条任务目标",
-    [
-        tasks_include("read_readme"),
-        effort_is("read_readme", "medium"),
-        result_contains("read_readme", "关键词"),
-    ],
-)
-```
-
-- `tasks_include(*ids)`：断言规划产出这些任务；
-- `effort_is(task_id, level)`：断言某任务强度；
-- `result_contains(task_id, *substrings)`：断言某任务结果包含子串。
-
-## 强度分档对照实验（judge）
-
-最小 eval 集只锁确定性行为，回答不了「高强度档位值不值」。对照实验对此：对**同一任务分别用 low / medium / high 强度运行**，再用 judge 模型打分，输出质量分 vs token 成本的对比。
-
-```bash
-# 默认：全部任务 × 三档 × 各 1 次（走真实模型，会消耗 token）
-uv run python -m demo_agent.experiment
-
-# 只跑一个任务 / 限制档位 / 每档重复 N 次取平均
-uv run python -m demo_agent.experiment --task summarize_readme --tiers low,high --repeat 3
-```
-
-推理强度会真实影响 worker 行为（见 [推理强度](reasoning-effort.md) 与 `demo_agent/graph.py::EFFORT_CONFIGS`）：
-
-| 档位 | 行为差异 |
+| 任务 | 固定输入与要求 |
 | --- | --- |
-| low | 简答（≤60 字）+ `max_tokens=256`（尝试限制）、迭代上限 3 |
-| medium | 完整回答 + `max_tokens=1024`、迭代上限 6 |
-| high | 完整结构化回答 + `max_tokens=2048`、迭代上限 6（自评已移除，单遍生成） |
+| `summarize_readme` | 根据内置 README 说明用途、输入和技术实现 |
+| `compare_architecture` | 对比同步提交和内存队列两条路径，判断进程退出时的数据边界 |
 
-> 已知问题：`max_tokens` 对 deepseek-v4-flash 这类推理模型不强制生效（实测 `max_tokens=64` 仍产出 205 输出 token），档位差异实际主要来自 prompt 指令；见下方「局限」。
+同一任务的各档和各次重复使用相同项目材料。worker 按所选档位生成答案，judge 根据材料、评分标准和候选答案盲评完整性、准确性、简洁性，各项为 1–5 分，均值为本次得分。无效评分会让该次实验失败。
 
-judge 从三个维度打分（各 1-5，取平均为最终分）：**完整性 / 准确性 / 简洁性**，用于给出部分分、避免单一满分饱和。
+报告提供逐次结果，并按任务与档位、跨任务档位分别汇总。worker 与 judge 分别记录请求耗时及模型返回的输入、输出、总 token。供应商缺报的用量显示为未知。平均分只计成功获得评分的试次，需结合失败次数、重复试验和人工抽检解读。
 
-任务集覆盖易/难两类：易（总结单文件）、难（跨文件架构对比）、**真机（调用本地 Blender 创建球体，execute 级工具）**。
-
-输出示例：
-
-```text
-任务: summarize_readme — 阅读 README.md 并总结项目定位与技术栈
-  tier    score  prompt  completion  total    耗时
-  low     3.0    1200    180        1380     2.1
-  medium  4.0    1600    260        1860     2.8
-  high    5.0    2200    420        2620     4.9
-
-=== 分档汇总（跨任务平均） ===
-  tier    平均分  平均token   平均耗时
-  low     3.00    1380        2.10
-  medium  4.00    1860        2.80
-  high    5.00    2620        4.90
-```
-
-## 当前覆盖与局限
-
-- **确定性 eval**：14 项，锁任务识别 + 强度分档 + 端到端 + 确认门（mock，零成本）。
-- **对照实验**：多维 judge（完整/准确/简洁）+ 三档成本/质量对比（live，消耗 token），含 Blender 真机任务。
-- **局限**：
-  - judge 是单一模型打分，存在方差与偏差；可靠结论需要 `--repeat` 多次取平均 + 人工抽检；
-  - `max_tokens` 对推理模型不强制生效（实测 `max_tokens=64` 仍产出 205 token，`max_completion_tokens` 亦无效）；
-  - **high 档自评已移除（A 方案）**：实验证明自评要么冗余扩写、要么臆造缺陷（Blender 任务 5.0→2.67），medium 是事实甜点位；
-  - 见 [ADR-006](decisions.md#adr-006)。
+离线基准验证确定性规划与执行。当前自动回归通过注入模型和模拟传输核对对照请求、评分格式与用量统计。供应商的实际质量和费用须在指定端点运行实验后读取。[推理强度](reasoning-effort.md) · [ADR-006](decisions.md#adr-006)
