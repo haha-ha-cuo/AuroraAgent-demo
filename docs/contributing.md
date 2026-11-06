@@ -25,7 +25,7 @@
 
 ## Python 模块命名
 
-以下命名实例针对 AuroraHarness 单仓实现，demo_agent 保持现有目录约定。
+以下实例针对 AuroraHarness 单仓实现，demo_agent 保持现有目录约定。
 
 模块采用小写 `snake_case`，名称表达领域职责。优先使用 `workflow_session.py`、`client_factory.py` 这类可定位到实现的名称；`config.py` 用于配置结构，`runtime.py` 用于运行时生命周期管理。单复数取决于职责，不为统一后缀而重命名所有文件。
 
@@ -35,8 +35,14 @@
 | `agent/orchestration/workflows.py` | `workflow_session.py` | 管理一条持久化工作流会话 |
 | `agent/core/runtime.py` | `graph_runner.py` | 驱动图执行与中断恢复 |
 | `cli/workflow.py` | `interactions.py` | 收集终端审批、澄清与评价 |
+| `agent/capability/registry.py` | `agent_registry.py` | 可调用 Agent 的发现与连接测试 |
+| `agent/sandbox/local.py` | `local_executor.py` | 选择并驱动平台沙箱执行器 |
+| `agent/transport/api.py` | `runtime_api.py` | 运行时协议请求与事件处理 |
+| `agent/transport/persistence.py` | `persistence_api.py` | 配置、历史与产物协议处理 |
 
-命名变更需同步导入、测试、分层说明及打包入口。公共导出尽量稳定；目录职责变化时再调整包边界。能力特化实现使用 `capability/specialization.py`，Agent 发现与委派注册使用 `capability/registry.py`。
+命名变更需同步导入、测试、分层说明及打包入口。公共导出尽量稳定；目录职责变化时再调整包边界。能力特化实现使用 `capability/specialization.py`，Agent 发现与委派注册使用 `capability/agent_registry.py`。
+
+全仓模块职责与保留命名的理由见 [Python 模块职责清单](architecture/python-modules.md)。
 
 ## 提交规范
 
