@@ -12,6 +12,6 @@ AuroraHarness 开发预览。
 2. 点击单条调用，展开参数、结果或错误。
 3. 切回「对话」继续。查看历史运行时，点击对应轮次的「查看轨迹」。
 
-![调用时间线](/images/call-timeline-pingfang.png)
+![调用时间线](/images/call-timeline-simple.png)
 
 工具实际执行后才会出现记录。
